@@ -8,6 +8,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h> 
 #include <WiFiClient.h>
+#include <ESPUI.h>
 
 // Declarare pini
 #define BUZZ 15
