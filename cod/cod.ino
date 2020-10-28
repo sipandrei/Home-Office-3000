@@ -17,13 +17,15 @@
 #define LDR A0
 #define LED 16
 
-//date pentru transformare citire fotorezistor in lux
+
+//date pentru transformare citire fotorezistor zin lux
 #define VIN 5 //voltaj fotorezistor
 #define R 10000 // rezistenta rezistor 
 
 //variabile server
 const char *ssid = "Desk Link";
 const char *pass = ""; 
+
 char *html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>Desk Link - Dashboard</title></head><body><center>Conectat</center><center><a href='/on'>Porneste buzzer </a><a href='/off'> Opreste buzzer</a></center></body></html>";
 ESP8266WebServer server(80);
 
@@ -76,9 +78,9 @@ void setup(){
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
-
-  dht.begin();
   
+  dht.begin();
+
   pinMode(BUTONspate, INPUT);
   pinMode(BUTONenter, INPUT);
   pinMode(BUTONfata, INPUT);
@@ -93,4 +95,5 @@ void loop(){
   server.handleClient();
   Serial.println(lux);
   delay(1000);
+
 }
