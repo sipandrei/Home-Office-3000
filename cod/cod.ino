@@ -18,13 +18,14 @@
 #define LED 16
 
 
+//date pentru transformare citire fotorezistor zin lux
+#define VIN 5 //voltaj fotorezistor
+#define R 10000 // rezistenta rezistor 
+
 //variabile server
-#ifndef APSSID
-#define APSSID "DeskLink"
-#define APPASS ""
-#endif
-const char *ssid = APSSID;
-const char *pass = APPASS; 
+const char *ssid = "Desk Link";
+const char *pass = ""; 
+
 char *html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>Desk Link - Dashboard</title></head><body><center>Conectat</center><center><a href='/on'>Porneste buzzer </a><a href='/off'> Opreste buzzer</a></center></body></html>";
 ESP8266WebServer server(80);
 
@@ -37,6 +38,12 @@ Adafruit_SSD1306 display(128, 64, &Wire, -1);
 DHT dht(SIGdht, DHT11);
 
 // Prelucrare citire LDR
+ int luminozitate(int raw){
+           float Vout = float(raw) * (VIN / float(1023));
+           float RLDR = (R * (VIN - Vout))/Vout;
+           int luxi=500/(RLDR/1000);
+           return luxi;
+        }
 
 void handleRoot() {
  Serial.println("You called root page");
@@ -60,6 +67,7 @@ void setup(){
   Serial.begin(115200);
   Serial.println();
   WiFi.mode(WIFI_AP);
+  WiFi.softAP(ssid, pass);
   IPAddress serverIp = WiFi.softAPIP();
   Serial.println(serverIp);
   server.on("/", handleRoot);
@@ -70,6 +78,8 @@ void setup(){
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
+  
+  dht.begin();
 
   pinMode(BUTONspate, INPUT);
   pinMode(BUTONenter, INPUT);
@@ -80,5 +90,10 @@ void setup(){
 }
 
 void loop(){
+  int citireLDR = analogRead(LDR);
+  int lux = luminozitate(citireLDR);
   server.handleClient();
+  Serial.println(lux);
+  delay(1000);
+
 }
