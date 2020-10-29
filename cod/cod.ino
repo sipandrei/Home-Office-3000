@@ -18,7 +18,7 @@
 #define LED 16
 
 
-//date pentru transformare citire fotorezistor zin lux
+//date pentru transformare citire fotorezistor in lux
 #define VIN 5 //voltaj fotorezistor
 #define R 10000 // rezistenta rezistor 
 
