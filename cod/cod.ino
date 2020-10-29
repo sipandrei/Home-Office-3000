@@ -6,7 +6,6 @@
 #include <Adafruit_SSD1306.h>
 #include <NTPtimeESP.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h> 
 #include <WiFiClient.h>
 #include <ESPUI.h>
 
@@ -26,9 +25,9 @@
 //variabile server
 const char *ssid = "Desk Link";
 const char *pass = ""; 
-
+AsyncWebServerRequest *request;
 char *html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>Desk Link - Dashboard</title></head><body><center>Conectat</center><center><a href='/on'>Porneste buzzer </a><a href='/off'> Opreste buzzer</a></center></body></html>";
-ESP8266WebServer server(80);
+AsyncWebServer server(80);
 
 //declarare module I2C
 RtcDS3231<TwoWire> Ceas(Wire);
@@ -46,20 +45,20 @@ DHT dht(SIGdht, DHT11);
            return luxi;
         }
 
-void handleRoot() {
+void handleRoot(AsyncWebServerRequest *request) {
  Serial.println("You called root page");
- server.send(200, "text/html", html); //Send web page
+ request -> send(200, "text/html", html); //Send web page
 }
 
-void buzzOn(){
+void buzzOn(AsyncWebServerRequest *request){
   Serial.println("Buzz on");
-  server.send(200, "text/html", html);
+  request -> send(200, "text/html", html);
   tone(BUZZ, 3000);
 }
 
-void buzzOff(){
+void buzzOff(AsyncWebServerRequest *request){
   Serial.println("Buzz off");
-  server.send(200, "text/html", html);
+  request -> send(200, "text/html", html);
   digitalWrite(BUZZ, LOW);
 }
 
@@ -93,7 +92,7 @@ void setup(){
 void loop(){
   int citireLDR = analogRead(LDR);
   int lux = luminozitate(citireLDR);
-  server.handleClient();
+  ArduinoOTA.handle();
   Serial.println(lux);
   delay(1000);
 
