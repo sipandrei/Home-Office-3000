@@ -14,7 +14,8 @@
 #define BUTONenter 12
 #define BUTONfata 13
 #define LDR A0
-#define LED 16
+#define LED 2
+#define VENT 16
 
 
 //date pentru transformare citire fotorezistor in lux
@@ -26,7 +27,7 @@ const char *ssid = "Desk Link";
 const char *pass = ""; 
 //char *html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>Desk Link - Dashboard</title></head><body><center>Conectat</center><center><a href='/on'>Porneste buzzer </a><br/><a href='/off'> Opreste buzzer</a></center></body></html>";
 DNSServer server;
-IPAddress apIP(192, 168, 1, 1);
+IPAddress apIP(192, 168, 4, 1);
 const byte DNS_PORT = 53;
 
 //variabile ESPUI
@@ -34,6 +35,7 @@ int graphId;
 int webTemp;
 int webUmi;
 int webLum;
+int webVent;
 
 //declarare module I2C
 RtcDS3231<TwoWire> Ceas(Wire);
@@ -54,12 +56,18 @@ DHT dht(SIGdht, DHT11);
 // Ventilatie -- todo
 
 // Functii interfata web
-void butonGrafice(Control *sender, int stare)
+void controlVentilatie(Control *sender, int stare)
 {
   switch(stare){
-    case B_DOWN: 
-    ESPUI.clearGraph(graphId); 
-    break;
+    case S_ACTIVE: 
+      digitalWrite(VENT,HIGH); 
+      Serial.println("Motor Ventilatie Pornit");
+      break;
+
+    case S_INACTIVE:
+      digitalWrite(VENT, LOW);
+      Serial.println("Motor Ventilatie Oprit");
+      break;
   }  
 }
 
@@ -75,11 +83,17 @@ void setup(){
   server.start(DNS_PORT, "*", apIP);
   Serial.println("Server initializat");
 
-  //graphId = ESPUI.graph("Temperatura", ControlColor::Wetasphalt);
-  //ESPUI.button("", &butonGrafice,ControlColor::Wetasphalt, "Sterge grafic");
-  webTemp = ESPUI.label("Temperatura", ControlColor::Wetasphalt);
-  webUmi = ESPUI.label("Umiditate", ControlColor::Wetasphalt);
-  webLum = ESPUI.label("Luminozitate", ControlColor::Wetasphalt);
+  uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Interactiune","Interactiune"); 
+  uint16_t tabMediu = ESPUI.addControl(ControlType::Tab, "Mediu", "Mediu");
+  uint16_t tabAlarm = ESPUI.addControl(ControlType::Tab, "Alarma", "Alarma");
+
+  //tabCtrl
+  webVent = ESPUI.addControl(ControlType::Switcher, "Control Ventilatie", "", ControlColor::Peterriver, tabCtrl, &controlVentilatie);
+  
+  //tabMediu
+  webTemp = ESPUI.addControl(ControlType::Label, "Temperatura","", ControlColor::Wetasphalt, tabMediu);
+  webUmi = ESPUI.addControl(ControlType::Label, "Umiditate", "", ControlColor::Wetasphalt, tabMediu);
+  
   ESPUI.begin("Desk Link");
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -96,16 +110,10 @@ void setup(){
 }
 
 void loop(){
-  /*
-  int citireLDR = analogRead(LDR);
-  int lux = luminozitate(citireLDR);
-  Serial.println(lux);
-  delay(1000);
-  */
-  //ESPUI.addGraphPoint(graphId, dht.readHumidity());
+
   ESPUI.print(webTemp, String(dht.readTemperature())+" °C");
   ESPUI.print(webUmi, String(dht.readHumidity())+" %");
-  ESPUI.print(webLum, "test");
+  
   server.processNextRequest();
 
 }
