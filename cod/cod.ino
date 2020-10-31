@@ -5,9 +5,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <NTPtimeESP.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h> 
-#include <WiFiClient.h>
+#include <DNSServer.h>
+#include <ESPUI.h>
 
 // Declarare pini
 #define BUZZ 15
@@ -15,19 +14,29 @@
 #define BUTONenter 12
 #define BUTONfata 13
 #define LDR A0
-#define LED 16
+#define LED 2
+#define VENT 16
 
 
 //date pentru transformare citire fotorezistor in lux
-#define VIN 5 //voltaj fotorezistor
-#define R 10000 // rezistenta rezistor 
+#define VIN 5             //voltaj fotorezistor
+#define R 10000           // rezistenta rezistor 
+
 
 //variabile server
 const char *ssid = "Desk Link";
 const char *pass = ""; 
+//char *html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>Desk Link - Dashboard</title></head><body><center>Conectat</center><center><a href='/on'>Porneste buzzer </a><br/><a href='/off'> Opreste buzzer</a></center></body></html>";
+DNSServer server;
+IPAddress apIP(192, 168, 4, 1);
+const byte DNS_PORT = 53;
 
-char *html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>Desk Link - Dashboard</title></head><body><center>Conectat</center><center><a href='/on'>Porneste buzzer </a><a href='/off'> Opreste buzzer</a></center></body></html>";
-ESP8266WebServer server(80);
+//variabile ESPUI
+int graphId;
+int webTemp;
+int webUmi;
+int webLum;
+int webVent;
 
 //declarare module I2C
 RtcDS3231<TwoWire> Ceas(Wire);
@@ -38,28 +47,29 @@ Adafruit_SSD1306 display(128, 64, &Wire, -1);
 DHT dht(SIGdht, DHT11);
 
 // Prelucrare citire LDR
- int luminozitate(int raw){
+ int luminozitate(){
+           int raw = analogRead(LDR);
            float Vout = float(raw) * (VIN / float(1023));
            float RLDR = (R * (VIN - Vout))/Vout;
            int luxi=500/(RLDR/1000);
            return luxi;
         }
+// Ventilatie -- todo
 
-void handleRoot() {
- Serial.println("You called root page");
- server.send(200, "text/html", html); //Send web page
-}
+// Functii interfata web
+void controlVentilatie(Control *sender, int stare)
+{
+  switch(stare){
+    case S_ACTIVE: 
+      digitalWrite(VENT,HIGH); 
+      Serial.println("Motor Ventilatie Pornit");
+      break;
 
-void buzzOn(){
-  Serial.println("Buzz on");
-  server.send(200, "text/html", html);
-  tone(BUZZ, 3000);
-}
-
-void buzzOff(){
-  Serial.println("Buzz off");
-  server.send(200, "text/html", html);
-  digitalWrite(BUZZ, LOW);
+    case S_INACTIVE:
+      digitalWrite(VENT, LOW);
+      Serial.println("Motor Ventilatie Oprit");
+      break;
+  }  
 }
 
 void setup(){
@@ -70,11 +80,22 @@ void setup(){
   WiFi.softAP(ssid, pass);
   IPAddress serverIp = WiFi.softAPIP();
   Serial.println(serverIp);
-  server.on("/", handleRoot);
-  server.on("/on", buzzOn);
-  server.on("/off", buzzOff);
-  server.begin();
+
+  server.start(DNS_PORT, "*", apIP);
   Serial.println("Server initializat");
+
+  uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Interactiune","Interactiune"); 
+  uint16_t tabMediu = ESPUI.addControl(ControlType::Tab, "Mediu", "Mediu");
+  uint16_t tabAlarm = ESPUI.addControl(ControlType::Tab, "Alarma", "Alarma");
+
+  //tabCtrl
+  webVent = ESPUI.addControl(ControlType::Switcher, "Control Ventilatie", "", ControlColor::Peterriver, tabCtrl, &controlVentilatie);
+  
+  //tabMediu
+  webTemp = ESPUI.addControl(ControlType::Label, "Temperatura","", ControlColor::Wetasphalt, tabMediu);
+  webUmi = ESPUI.addControl(ControlType::Label, "Umiditate", "", ControlColor::Wetasphalt, tabMediu);
+  
+  ESPUI.begin("Desk Link");
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
@@ -90,10 +111,10 @@ void setup(){
 }
 
 void loop(){
-  int citireLDR = analogRead(LDR);
-  int lux = luminozitate(citireLDR);
-  server.handleClient();
-  Serial.println(lux);
-  delay(1000);
+
+  ESPUI.print(webTemp, String(dht.readTemperature())+" °C");
+  ESPUI.print(webUmi, String(dht.readHumidity())+" %");
+  
+  server.processNextRequest();
 
 }
