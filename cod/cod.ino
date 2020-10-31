@@ -22,6 +22,7 @@
 #define VIN 5             //voltaj fotorezistor
 #define R 10000           // rezistenta rezistor 
 
+
 //variabile server
 const char *ssid = "Desk Link";
 const char *pass = ""; 
