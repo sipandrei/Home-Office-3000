@@ -134,13 +134,19 @@ void setup(){
   
   Ceas.Begin();
    if (!Ceas.IsDateTimeValid()) 
+      {
         if (Ceas.LastError() != 0)
         {
             Serial.print("Eroare comunicare ceas = ");
             Serial.println(Ceas.LastError());
         }
-  Ceas.SetDateTime(RtcDateTime(__DATE__,__TIME__));  
-  
+      else
+        {
+          Serial.println("Ceasul a pierdut timpul");
+          Ceas.SetDateTime(RtcDateTime(__DATE__,__TIME__));  
+        }
+       }
+
   dht.begin();
 
   pinMode(BUTONspate, INPUT);
