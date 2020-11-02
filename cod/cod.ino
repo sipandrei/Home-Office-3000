@@ -1,4 +1,3 @@
-#include <RTClib.h>
 #include <DHT.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -7,6 +6,7 @@
 #include <NTPtimeESP.h>
 #include <DNSServer.h>
 #include <ESPUI.h>
+#include <RtcDS3231.h>
 
 // Declarare pini
 #define BUZZ 15
@@ -26,7 +26,6 @@
 //variabile server
 const char *ssid = "Desk Link";
 const char *pass = ""; 
-//char *html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>Desk Link - Dashboard</title></head><body><center>Conectat</center><center><a href='/on'>Porneste buzzer </a><br/><a href='/off'> Opreste buzzer</a></center></body></html>";
 DNSServer server;
 IPAddress apIP(192, 168, 4, 1);
 const byte DNS_PORT = 53;
@@ -43,10 +42,11 @@ int webAlarmMin;
 int webAlarmSwitch, webAlarm;
 int webOra, webMin, webSec;
 
+String webNumAlarmOra, webNumAlarmMin, webNumOra,webNumMin, webNumSec;
+
 //declarare module I2C
-RTC_DS3231 Ceas;
+RtcDS3231<TwoWire> Ceas(Wire);      //rtc libraria rtc by makuna
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
-char zileSaptamana[8][12]={"","Luni","Marti","Miercuri","Joi","Vineri","Sambata","Duminica"};
 
 // Preluare temperatura si umiditate 
 #define SIGdht 0
@@ -78,6 +78,15 @@ void controlVentilatie(Control *sender, int stare)
   }  
 }
 
+void oraAlarma( Control* sender, int type){
+  webNumAlarmOra = sender->value;
+  Serial.println(webNumAlarmOra + " ora alarma");
+}
+void minAlarma( Control* sender, int type){
+  webNumAlarmMin = sender->value;
+  Serial.println(webNumAlarmMin + " minut alarma");
+}
+
 void setup(){
   delay(2000);
   Serial.begin(115200);
@@ -106,10 +115,10 @@ void setup(){
   webTimp = ESPUI.addControl(ControlType::Label, "Ora","", ControlColor::Wetasphalt, tabMediu);
 
   //tabAlarm
-  webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma","", ControlColor::Emerald, tabAlarm);
-  webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma","", ControlColor::Emerald, tabAlarm);
+  webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma", webNumAlarmOra, ControlColor::Emerald, tabAlarm, &oraAlarma);
+  webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma", webNumAlarmMin, ControlColor::Emerald, tabAlarm, &minAlarma);
   webAlarmSwitch = ESPUI.addControl(ControlType::Switcher, "Stare alarma","", ControlColor::Emerald, tabAlarm);
-  //webAlarm = ESPUI.addControl(ControlType::Label, "Timp alarma", "", ControlColor::Emerald, tabAlarm);
+  webAlarm = ESPUI.addControl(ControlType::Label, "Timp alarma", "", ControlColor::Emerald, tabAlarm);
   
 
   //tabCeas
@@ -122,17 +131,15 @@ void setup(){
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
-
-  if(! Ceas.begin()){
-    Serial.println("Ceas de negasit");
-  }
-
-  if(Ceas.lostPower())
-  {
-    Serial.println("Ceasul a pierdut putere, ajusteaza ceasul");
-    Ceas.adjust(DateTime(F(__DATE__),F(__TIME__)));
-    }
   
+  Ceas.Begin();
+   if (!Ceas.IsDateTimeValid()) 
+        if (Ceas.LastError() != 0)
+        {
+            Serial.print("Eroare comunicare ceas = ");
+            Serial.println(Ceas.LastError());
+        }
+  Ceas.SetDateTime(RtcDateTime(__DATE__,__TIME__));  
   
   dht.begin();
 
@@ -147,11 +154,25 @@ void setup(){
 }
 
 void loop(){
-  DateTime now = Ceas.now();  
+  RtcDateTime now = Ceas.GetDateTime(); 
   ESPUI.print(webTemp, String(dht.readTemperature())+" °C");
   ESPUI.print(webUmi, String(dht.readHumidity())+" %");
-  ESPUI.print(webTimp, String(now.hour())+":"+String(now.minute()));
-
+  printTimp(now);
   server.processNextRequest();
 
+}
+
+#define countof(a) (sizeof(a) / sizeof(a[0]))
+
+void printTimp(const RtcDateTime& dt)
+{
+    char datestring[14];
+
+    snprintf_P(datestring, 
+            countof(datestring),
+            PSTR("%02u:%02u:%02u"),
+            dt.Hour(),
+            dt.Minute(),
+            dt.Second() );
+    ESPUI.print(webTimp, datestring);
 }
