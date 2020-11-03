@@ -1,3 +1,6 @@
+#include <RtcDateTime.h>
+#include <RtcDS3231.h>
+#include <RtcUtility.h>
 #include <DHT.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -6,7 +9,6 @@
 #include <NTPtimeESP.h>
 #include <DNSServer.h>
 #include <ESPUI.h>
-#include <RtcDS3231.h>
 
 // Declarare pini
 #define BUZZ 15
@@ -42,12 +44,18 @@ int webAlarmMin;
 int webAlarmSwitch, webAlarm;
 int webOra, webMin, webSec;
 
-String webNumAlarmOra, webNumAlarmMin, webNumOra,webNumMin, webNumSec;
-
+uint8_t webNumAlarmOra, webNumAlarmMin, webNumOra,webNumMin, webNumSec;
 //declarare module I2C
-RtcDS3231<TwoWire> Ceas(Wire);      //rtc libraria rtc by makuna
+RtcDS3231<TwoWire> Ceas(Wire);     
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
-
+RtcDateTime now = Ceas.GetDateTime();
+   DS3231AlarmOne alarm1(
+            now.Day(),
+            webNumAlarmOra,
+            webNumAlarmMin, 
+            now.Second(),
+            DS3231AlarmOneControl_HoursMinutesSecondsMatch);   
+   
 // Preluare temperatura si umiditate 
 #define SIGdht 0
 DHT dht(SIGdht, DHT11);
@@ -60,7 +68,6 @@ DHT dht(SIGdht, DHT11);
            int luxi=500/(RLDR/1000);
            return luxi;
         }
-// Ventilatie -- todo
 
 // Functii interfata web
 void controlVentilatie(Control *sender, int stare)
@@ -78,17 +85,32 @@ void controlVentilatie(Control *sender, int stare)
   }  
 }
 
+// Configurare alarma 
 void oraAlarma( Control* sender, int type){
-  webNumAlarmOra = sender->value;
+  webNumAlarmOra = sender->value.toInt();
+   DS3231AlarmOne alarm1(
+            now.Day(),
+            webNumAlarmOra,
+            webNumAlarmMin, 
+            now.Second(),
+            DS3231AlarmOneControl_HoursMinutesSecondsMatch);
+            Ceas.SetAlarmOne(alarm1);
   Serial.println(webNumAlarmOra + " ora alarma");
 }
 void minAlarma( Control* sender, int type){
-  webNumAlarmMin = sender->value;
+  webNumAlarmMin = sender->value.toInt();
+    DS3231AlarmOne alarm1(
+            now.Day(),
+            webNumAlarmOra,
+            webNumAlarmMin, 
+            now.Second(),
+            DS3231AlarmOneControl_HoursMinutesSecondsMatch);
+            Ceas.SetAlarmOne(alarm1);
   Serial.println(webNumAlarmMin + " minut alarma");
 }
 
-void setup(){
-  delay(2000);
+void setup(){ 
+  ESPUI.setVerbosity(Verbosity::Verbose);
   Serial.begin(115200);
   Serial.println();
   WiFi.mode(WIFI_AP);
@@ -100,6 +122,7 @@ void setup(){
   Serial.println("Server initializat");
 
   Wire.begin();
+  Ceas.SetAlarmOne(alarm1); 
   
   uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Interactiune","Interactiune"); 
   uint16_t tabMediu = ESPUI.addControl(ControlType::Tab, "Mediu", "Mediu");
@@ -115,8 +138,8 @@ void setup(){
   webTimp = ESPUI.addControl(ControlType::Label, "Ora","", ControlColor::Wetasphalt, tabMediu);
 
   //tabAlarm
-  webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma", webNumAlarmOra, ControlColor::Emerald, tabAlarm, &oraAlarma);
-  webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma", webNumAlarmMin, ControlColor::Emerald, tabAlarm, &minAlarma);
+  webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma", "", ControlColor::Emerald, tabAlarm, &oraAlarma);
+  webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma", "", ControlColor::Emerald, tabAlarm, &minAlarma);
   webAlarmSwitch = ESPUI.addControl(ControlType::Switcher, "Stare alarma","", ControlColor::Emerald, tabAlarm);
   webAlarm = ESPUI.addControl(ControlType::Label, "Timp alarma", "", ControlColor::Emerald, tabAlarm);
   
@@ -156,11 +179,12 @@ void setup(){
   pinMode(BUZZ, OUTPUT);
   pinMode(VENT, OUTPUT);
   digitalWrite(BUZZ, LOW);
-   
+
+  
 }
 
 void loop(){
-  RtcDateTime now = Ceas.GetDateTime(); 
+  now = Ceas.GetDateTime(); 
   ESPUI.print(webTemp, String(dht.readTemperature())+" °C");
   ESPUI.print(webUmi, String(dht.readHumidity())+" %");
   printTimp(now);
