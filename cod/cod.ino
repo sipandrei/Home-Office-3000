@@ -1,3 +1,8 @@
+// de adaugat afisare oled
+// de adaugat oprire alarma si salvare in memoria ceasului
+// de adaugat calculare faze soare
+
+#include <Button2.h>
 #include <RtcDateTime.h>
 #include <RtcDS3231.h>
 #include <RtcUtility.h>
@@ -12,13 +17,13 @@
 
 // Declarare pini
 #define BUZZ 15
-#define BUTONspate 14
-#define BUTONenter 12
-#define BUTONfata 13
 #define LDR A0
 #define LED 2
 #define VENT 16
 
+Button2 butonSpate = Button2(14);
+Button2 butonEnter = Button2(12);
+Button2 butonFata = Button2(13);
 
 //date pentru transformare citire fotorezistor in lux
 #define VIN 5             //voltaj fotorezistor
@@ -37,14 +42,14 @@ int graphId;
 int webTemp;
 int webUmi;
 int webLum;
-int webVent;
+int webVent, webVentNum;
 int webTimp;
 int webAlarmOra;
 int webAlarmMin;
 int webAlarmSwitch, webAlarm;
 int webOra, webMin, webSec;
-
-uint8_t webNumAlarmOra, webNumAlarmMin, offMin = -1, offSec = -2;
+bool vent = LOW, anulare = false;
+uint8_t webNumAlarmOra, webNumAlarmMin, offMin = -1, offSec = -2, numVent = 28;
 //declarare module I2C
 RtcDS3231<TwoWire> Ceas(Wire);
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
@@ -66,7 +71,7 @@ DS3231AlarmOne alarmOff(
 #define SIGdht 0
 DHT dht(SIGdht, DHT11);
 
-// Prelucrare citire LDR
+// Luminozitate
 int luminozitate() {
   int raw = analogRead(LDR);
   float Vout = float(raw) * (VIN / float(1023));
@@ -76,19 +81,51 @@ int luminozitate() {
 }
 
 // Functii interfata web
+// Ventilatie
 void controlVentilatie(Control *sender, int stare)
 {
   switch (stare) {
     case S_ACTIVE:
-      digitalWrite(VENT, HIGH);
+      //digitalWrite(VENT, HIGH);
       Serial.println("Motor Ventilatie Pornit");
+      vent = true;
       break;
 
     case S_INACTIVE:
-      digitalWrite(VENT, LOW);
+      //digitalWrite(VENT, LOW);
       Serial.println("Motor Ventilatie Oprit");
+      vent = false;
       break;
   }
+}
+
+void tempVentilatie(Control* sender, int value)
+{
+  numVent = sender -> value.toInt();
+}
+
+void ventilatieAuto()
+{
+   digitalWrite(VENT, vent);
+   if(dht.readTemperature() >= numVent && anulare == false)
+      {
+        vent = HIGH;   
+      }
+      else if(dht.readTemperature() < numVent)
+      anulare = false;
+}
+
+void pornireVentButon(Button2& btn)
+{
+  //de adaugat pagina
+  if(btn == butonEnter)
+   {
+    anulare = true;
+    Serial.println("Buton enter apasat"); 
+    if(vent == LOW)
+      vent = HIGH;
+      else
+      vent = LOW;}
 }
 
 // Configurare alarma
@@ -168,13 +205,14 @@ void setup() {
   Wire.begin();
   Ceas.SetAlarmOne(alarm1);
 
-  uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Interactiune", "Interactiune");
+  uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Ventilatie", "Ventilatie");
   uint16_t tabMediu = ESPUI.addControl(ControlType::Tab, "Mediu", "Mediu");
   uint16_t tabAlarm = ESPUI.addControl(ControlType::Tab, "Alarma", "Alarma");
   uint16_t tabCeas = ESPUI.addControl(ControlType::Tab, "Ajustare Ceas", "Ajustare Ceas");
 
-  //tabCtrl
+  //tabVentilatie
   webVent = ESPUI.addControl(ControlType::Switcher, "Control Ventilatie", "", ControlColor::Peterriver, tabCtrl, &controlVentilatie);
+  webVentNum = ESPUI.addControl(ControlType::Number, "Introduceti temperatura la care porneste ventilatorul", String(numVent), ControlColor::Peterriver, tabCtrl, &tempVentilatie);
 
   //tabMediu
   webTemp = ESPUI.addControl(ControlType::Label, "Temperatura", "", ControlColor::Wetasphalt, tabMediu);
@@ -216,14 +254,13 @@ void setup() {
   }
   dht.begin();
 
-  pinMode(BUTONspate, INPUT);
-  pinMode(BUTONenter, INPUT);
-  pinMode(BUTONfata, INPUT);
   pinMode(LED, OUTPUT);
   pinMode(BUZZ, OUTPUT);
   pinMode(VENT, OUTPUT);
   digitalWrite(BUZZ, LOW);
-
+  
+  butonEnter.setTapHandler(pornireVentButon);
+  
   Ceas.LatchAlarmsTriggeredFlags();
 }
 
@@ -232,6 +269,13 @@ void loop() {
   ESPUI.print(webTemp, String(dht.readTemperature()) + " °C");
   ESPUI.print(webUmi, String(dht.readHumidity()) + " %");
   printTimp(now);
+  
+  ventilatieAuto();
+   
+  butonSpate.loop(); 
+  butonEnter.loop();
+  butonFata.loop();
+  
   server.processNextRequest();
 
 }
