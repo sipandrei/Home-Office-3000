@@ -1,3 +1,8 @@
+// de adaugat afisare oled
+// de adaugat oprire alarma si salvare in memoria ceasului
+// de adaugat calculare faze soare
+
+#include <Button2.h>
 #include <RtcDateTime.h>
 #include <RtcDS3231.h>
 #include <RtcUtility.h>
@@ -12,13 +17,13 @@
 
 // Declarare pini
 #define BUZZ 15
-#define BUTONspate 14
-#define BUTONenter 12
-#define BUTONfata 13
 #define LDR A0
 #define LED 2
 #define VENT 16
 
+Button2 butonSpate = Button2(14);
+Button2 butonEnter = Button2(12);
+Button2 butonFata = Button2(13);
 
 //date pentru transformare citire fotorezistor in lux
 #define VIN 5             //voltaj fotorezistor
@@ -43,7 +48,7 @@ int webAlarmOra;
 int webAlarmMin;
 int webAlarmSwitch, webAlarm;
 int webOra, webMin, webSec;
-bool vent = false;
+bool vent = LOW, anulare = false;
 uint8_t webNumAlarmOra, webNumAlarmMin, offMin = -1, offSec = -2, numVent = 28;
 //declarare module I2C
 RtcDS3231<TwoWire> Ceas(Wire);
@@ -101,19 +106,26 @@ void tempVentilatie(Control* sender, int value)
 
 void ventilatieAuto()
 {
-  if(dht.readTemperature() >= numVent && vent == false)
-     digitalWrite(VENT,HIGH);
-    else if(vent == false)
-      digitalWrite(VENT,LOW);
+   digitalWrite(VENT, vent);
+   if(dht.readTemperature() >= numVent && anulare == false)
+      {
+        vent = HIGH;   
+      }
+      else if(dht.readTemperature() < numVent)
+      anulare = false;
 }
 
-void pornireVentButon()
+void pornireVentButon(Button2& btn)
 {
-  if(digitalRead(BUTONenter) == HIGH)
+  //de adaugat pagina
+  if(btn == butonEnter)
+   {
+    anulare = true;
+    Serial.println("Buton enter apasat"); 
     if(vent == LOW)
       vent = HIGH;
       else
-      vent = LOW;
+      vent = LOW;}
 }
 
 // Configurare alarma
@@ -242,14 +254,13 @@ void setup() {
   }
   dht.begin();
 
-  pinMode(BUTONspate, INPUT);
-  pinMode(BUTONenter, INPUT);
-  pinMode(BUTONfata, INPUT);
   pinMode(LED, OUTPUT);
   pinMode(BUZZ, OUTPUT);
   pinMode(VENT, OUTPUT);
   digitalWrite(BUZZ, LOW);
-
+  
+  butonEnter.setTapHandler(pornireVentButon);
+  
   Ceas.LatchAlarmsTriggeredFlags();
 }
 
@@ -258,12 +269,13 @@ void loop() {
   ESPUI.print(webTemp, String(dht.readTemperature()) + " °C");
   ESPUI.print(webUmi, String(dht.readHumidity()) + " %");
   printTimp(now);
+  
   ventilatieAuto();
-  pornireVentButon();
-  if(vent == true)
-    digitalWrite(VENT, HIGH);
-   else
-    digitalWrite(VENT, LOW);
+   
+  butonSpate.loop(); 
+  butonEnter.loop();
+  butonFata.loop();
+  
   server.processNextRequest();
 
 }
