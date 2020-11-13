@@ -14,12 +14,15 @@
 #include <NTPtimeESP.h>
 #include <DNSServer.h>
 #include <ESPUI.h>
+#include <EepromAT24C32.h>
 
 // Declarare pini
 #define BUZZ 15
 #define LDR A0
 #define LED 2
 #define VENT 16
+#define oprireAlarma1 14
+#define oprireAlarma2 13
 
 Button2 butonSpate = Button2(14);
 Button2 butonEnter = Button2(12);
@@ -44,28 +47,20 @@ int webUmi;
 int webLum;
 int webVent, webVentNum;
 int webTimp;
-int webAlarmOra;
-int webAlarmMin;
+int webAlarmOra, oraNow;
+int webAlarmMin, minNow;
 int webAlarmSwitch, webAlarm;
 int webOra, webMin, webSec;
-bool vent = LOW, anulare = false;
-uint8_t webNumAlarmOra, webNumAlarmMin, offMin = -1, offSec = -2, numVent = 28;
+bool vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false;
+uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28;
+uint16_t minAdd = 32, oraAdd = 64;
+
 //declarare module I2C
 RtcDS3231<TwoWire> Ceas(Wire);
+EepromAt24c32<TwoWire> EepromCeas(Wire);
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 RtcDateTime now = Ceas.GetDateTime();
-DS3231AlarmOne alarm1(
-  now.Day(),
-  webNumAlarmOra,
-  webNumAlarmMin,
-  now.Second(),
-  DS3231AlarmOneControl_HoursMinutesSecondsMatch);
-DS3231AlarmOne alarmOff(
-  now.Day(),
-  offMin,
-  offSec,
-  now.Second(),
-  DS3231AlarmOneControl_HoursMinutesSecondsMatch);
+
 
 // Preluare temperatura si umiditate
 #define SIGdht 0
@@ -131,42 +126,34 @@ void pornireVentButon(Button2& btn)
 // Configurare alarma
 void timpAlarma(Control* sender, int type)
 {
-  ESPUI.print(webAlarm, String(webNumAlarmOra) + ":" + String(webNumAlarmMin));
+  ESPUI.print(webAlarm, String(EepromCeas.GetMemory(oraAdd)) + ":" + String(EepromCeas.GetMemory(minAdd)));
 }
-void oraAlarma( Control* sender, int type) {
-  webNumAlarmOra = sender->value.toInt();
-  DS3231AlarmOne alarm1(
-    now.Day(),
-    webNumAlarmOra,
-    webNumAlarmMin,
-    now.Second(),
-    DS3231AlarmOneControl_HoursMinutesSecondsMatch);
-  Ceas.SetAlarmOne(alarm1);
-  Serial.println(webNumAlarmOra + " ora alarma");
-  ESPUI.print(webAlarm, String(webNumAlarmOra) + ":" + String(webNumAlarmMin));
+void inputOraAlarma( Control* sender, int value) {
+  oraAlarma = sender->value.toInt();
+  EepromCeas.SetMemory(oraAdd, oraAlarma);
+  
+  Serial.println(EepromCeas.GetMemory(oraAdd) + " ora alarma");
+  ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
 }
-void minAlarma( Control* sender, int type) {
-  webNumAlarmMin = sender->value.toInt();
-  DS3231AlarmOne alarm1(
-    now.Day(),
-    webNumAlarmOra,
-    webNumAlarmMin,
-    now.Second(),
-    DS3231AlarmOneControl_HoursMinutesSecondsMatch);
-  Ceas.SetAlarmOne(alarm1);
-  Serial.println(webNumAlarmMin + " minut alarma");
-  ESPUI.print(webAlarm, String(webNumAlarmOra) + ":" + String(webNumAlarmMin));
+void inputMinAlarma( Control* sender, int value) {
+  minAlarma = sender->value.toInt();
+  EepromCeas.SetMemory(minAdd, minAlarma);
+   
+  Serial.println(EepromCeas.GetMemory(minAdd) + " minut alarma");
+  ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
 }
 void activareAlarma(Control *sender, int value)
 {
   switch (value) {
     case S_ACTIVE:
-      Ceas.SetAlarmOne(alarm1);
+      alarma = true;
+      EepromCeas.SetMemory(3, 1);
       Serial.println("Alarma activata!");
       break;
 
     case S_INACTIVE:
-      Ceas.SetAlarmOne(alarmOff);
+      alarma = false;
+      EepromCeas.SetMemory(3, 0);
       Serial.println("Alarma dezactivata!");
       break;
   }
@@ -203,7 +190,6 @@ void setup() {
   Serial.println("Server initializat");
 
   Wire.begin();
-  Ceas.SetAlarmOne(alarm1);
 
   uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Ventilatie", "Ventilatie");
   uint16_t tabMediu = ESPUI.addControl(ControlType::Tab, "Mediu", "Mediu");
@@ -219,8 +205,8 @@ void setup() {
   webUmi = ESPUI.addControl(ControlType::Label, "Umiditate", "", ControlColor::Wetasphalt, tabMediu);
 
   //tabAlarm
-  webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma", "", ControlColor::Emerald, tabAlarm, &oraAlarma);
-  webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma", "", ControlColor::Emerald, tabAlarm, &minAlarma);
+  webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma", "", ControlColor::Emerald, tabAlarm, &inputOraAlarma);
+  webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma", "", ControlColor::Emerald, tabAlarm, &inputMinAlarma);
   webAlarmSwitch = ESPUI.addControl(ControlType::Switcher, "Stare alarma", "", ControlColor::Emerald, tabAlarm, &activareAlarma);
   webAlarm = ESPUI.addControl(ControlType::Label, "Timp alarma", "", ControlColor::Emerald, tabAlarm, &timpAlarma);
 
@@ -231,7 +217,7 @@ void setup() {
   webTimp = ESPUI.addControl(ControlType::Label, "Ora", "", ControlColor::Carrot, tabCeas);
 
   ESPUI.begin("Desk Link");
-  ESPUI.print(webAlarm, String(webNumAlarmOra) + ":" + String(webNumAlarmMin));
+  ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
@@ -252,8 +238,21 @@ void setup() {
       Ceas.SetDateTime(RtcDateTime(__DATE__, __TIME__));
     }
   }
+  EepromCeas.Begin();
   dht.begin();
+  
+  Ceas.Enable32kHzPin(false);
+  Ceas.SetSquareWavePin(DS3231SquareWavePin_ModeNone); 
 
+  //adrese ora si minut alarma
+  EepromCeas.SetMemory(0, minAdd);
+  EepromCeas.SetMemory(1,oraAdd);
+
+  //citire ora si minut alarma
+  minAlarma = EepromCeas.GetMemory(minAdd);
+  oraAlarma = EepromCeas.GetMemory(oraAdd);
+  alarma = EepromCeas.GetMemory(3);
+  
   pinMode(LED, OUTPUT);
   pinMode(BUZZ, OUTPUT);
   pinMode(VENT, OUTPUT);
@@ -275,6 +274,29 @@ void loop() {
   butonSpate.loop(); 
   butonEnter.loop();
   butonFata.loop();
+
+  if(alarma == true)
+  {
+    if(oraNow == oraAlarma && minNow == minAlarma)
+     {
+      if(repetare == false)
+        alarmaActiva = true;
+     }
+     else
+      repetare = false;
+      
+    if(alarmaActiva == true)
+    {
+      if((digitalRead(oprireAlarma1) == HIGH && digitalRead(oprireAlarma2) == HIGH) or (luminozitate() >= 1 && oraAlarma<=7))
+        {
+          repetare = true;
+          alarmaActiva = false;
+          Serial.println("Alarma inchisa");
+        }
+
+      tone(BUZZ, 1500,2000);
+    }
+  }
   
   server.processNextRequest();
 
@@ -292,5 +314,8 @@ void printTimp(const RtcDateTime& dt)
              dt.Hour(),
              dt.Minute(),
              dt.Second() );
+
+  oraNow = dt.Hour();
+  minNow = dt.Minute();
   ESPUI.print(webTimp, datestring);
 }
