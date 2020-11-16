@@ -1,5 +1,6 @@
+//timer birou 
+// pauza masa
 // de adaugat afisare oled
-// de adaugat oprire alarma si salvare in memoria ceasului
 // de adaugat calculare faze soare
 
 #include <Button2.h>
@@ -40,7 +41,7 @@ DNSServer server;
 IPAddress apIP(192, 168, 4, 1);
 const byte DNS_PORT = 53;
 
-//variabile ESPUI
+//variabile interfata web
 int graphId;
 int webTemp;
 int webUmi;
@@ -49,17 +50,19 @@ int webVent, webVentNum;
 int webTimp;
 int webAlarmOra, oraNow;
 int webAlarmMin, minNow;
-int webAlarmSwitch, webAlarm;
+int webAlarmSwitch, webAlarm, webAlarmTimer, secBirou;
 int webOra, webMin, webSec;
 bool vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false;
 uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28;
-uint16_t minAdd = 32, oraAdd = 64;
+uint16_t minAdd = 32, oraAdd = 64, birouAdd = 10;
 
 //declarare module I2C
 RtcDS3231<TwoWire> Ceas(Wire);
 EepromAt24c32<TwoWire> EepromCeas(Wire);
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 RtcDateTime now = Ceas.GetDateTime();
+
+//variabile pozitie solara
 
 
 // Preluare temperatura si umiditate
@@ -158,6 +161,10 @@ void activareAlarma(Control *sender, int value)
       break;
   }
 }
+void timerBirou(Control *sender, int value){
+  secBirou = sender->value.toInt();
+  EepromCeas.SetMemory(birouAdd, secBirou);
+}
 
 //Ajustare ceas
 int ora = 0,minu = 0,sec = 0;
@@ -209,6 +216,7 @@ void setup() {
   webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma", "", ControlColor::Emerald, tabAlarm, &inputMinAlarma);
   webAlarmSwitch = ESPUI.addControl(ControlType::Switcher, "Stare alarma", "", ControlColor::Emerald, tabAlarm, &activareAlarma);
   webAlarm = ESPUI.addControl(ControlType::Label, "Timp alarma", "", ControlColor::Emerald, tabAlarm, &timpAlarma);
+  webAlarmTimer = ESPUI.addControl(ControlType::Number, "Introduceti numarul de secunde pentru a ajunge la birou", String(EepromCeas.GetMemory(birouAdd)), ControlColor::Emerald, tabAlarm, &timerBirou);
 
   //tabCeas
   webOra = ESPUI.addControl(ControlType::Number, "Ore", "", ControlColor::Carrot, tabCeas, &ajustareOra);
@@ -260,7 +268,6 @@ void setup() {
   
   butonEnter.setTapHandler(pornireVentButon);
   
-  Ceas.LatchAlarmsTriggeredFlags();
 }
 
 void loop() {
