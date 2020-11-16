@@ -1,4 +1,3 @@
-//timer birou 
 // pauza masa
 // de adaugat afisare oled
 // de adaugat calculare faze soare
@@ -52,9 +51,10 @@ int webAlarmOra, oraNow;
 int webAlarmMin, minNow;
 int webAlarmSwitch, webAlarm, webAlarmTimer, secBirou;
 int webOra, webMin, webSec;
-bool vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false;
+bool vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false, timerInceput = false, firstRun = true;
 uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28;
 uint16_t minAdd = 32, oraAdd = 64, birouAdd = 10;
+unsigned long milisecundeTrecut;
 
 //declarare module I2C
 RtcDS3231<TwoWire> Ceas(Wire);
@@ -127,23 +127,22 @@ void pornireVentButon(Button2& btn)
 }
 
 // Configurare alarma
-void timpAlarma(Control* sender, int type)
-{
-  ESPUI.print(webAlarm, String(EepromCeas.GetMemory(oraAdd)) + ":" + String(EepromCeas.GetMemory(minAdd)));
-}
+void timpAlarma( Control* sender, int value){
+      ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
+  }
 void inputOraAlarma( Control* sender, int value) {
   oraAlarma = sender->value.toInt();
   EepromCeas.SetMemory(oraAdd, oraAlarma);
   
   Serial.println(EepromCeas.GetMemory(oraAdd) + " ora alarma");
-  ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
+      ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
 }
 void inputMinAlarma( Control* sender, int value) {
   minAlarma = sender->value.toInt();
   EepromCeas.SetMemory(minAdd, minAlarma);
    
   Serial.println(EepromCeas.GetMemory(minAdd) + " minut alarma");
-  ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
+     ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
 }
 void activareAlarma(Control *sender, int value)
 {
@@ -162,8 +161,8 @@ void activareAlarma(Control *sender, int value)
   }
 }
 void timerBirou(Control *sender, int value){
-  secBirou = sender->value.toInt();
-  EepromCeas.SetMemory(birouAdd, secBirou);
+  secBirou = sender->value.toInt()*1000;
+  EepromCeas.SetMemory(birouAdd,secBirou);
 }
 
 //Ajustare ceas
@@ -185,6 +184,8 @@ void ajustareSecunda( Control* sender, int value){
 }
 
 void setup() {
+  secBirou = EepromCeas.GetMemory(10)*1000;
+  
   ESPUI.setVerbosity(Verbosity::Verbose);
   Serial.begin(115200);
   Serial.println();
@@ -215,8 +216,8 @@ void setup() {
   webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma", "", ControlColor::Emerald, tabAlarm, &inputOraAlarma);
   webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma", "", ControlColor::Emerald, tabAlarm, &inputMinAlarma);
   webAlarmSwitch = ESPUI.addControl(ControlType::Switcher, "Stare alarma", "", ControlColor::Emerald, tabAlarm, &activareAlarma);
-  webAlarm = ESPUI.addControl(ControlType::Label, "Timp alarma", "", ControlColor::Emerald, tabAlarm, &timpAlarma);
   webAlarmTimer = ESPUI.addControl(ControlType::Number, "Introduceti numarul de secunde pentru a ajunge la birou", String(EepromCeas.GetMemory(birouAdd)), ControlColor::Emerald, tabAlarm, &timerBirou);
+  webAlarm = ESPUI.addControl(ControlType::Label, "Timp Alarma", "", ControlColor::Emerald, tabAlarm, &timpAlarma);
 
   //tabCeas
   webOra = ESPUI.addControl(ControlType::Number, "Ore", "", ControlColor::Carrot, tabCeas, &ajustareOra);
@@ -225,8 +226,7 @@ void setup() {
   webTimp = ESPUI.addControl(ControlType::Label, "Ora", "", ControlColor::Carrot, tabCeas);
 
   ESPUI.begin("Desk Link");
-  ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
-
+  
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
 
@@ -255,11 +255,6 @@ void setup() {
   //adrese ora si minut alarma
   EepromCeas.SetMemory(0, minAdd);
   EepromCeas.SetMemory(1,oraAdd);
-
-  //citire ora si minut alarma
-  minAlarma = EepromCeas.GetMemory(minAdd);
-  oraAlarma = EepromCeas.GetMemory(oraAdd);
-  alarma = EepromCeas.GetMemory(3);
   
   pinMode(LED, OUTPUT);
   pinMode(BUZZ, OUTPUT);
@@ -275,6 +270,15 @@ void loop() {
   ESPUI.print(webTemp, String(dht.readTemperature()) + " °C");
   ESPUI.print(webUmi, String(dht.readHumidity()) + " %");
   printTimp(now);
+   
+  //citire ora si minut alarma
+  if(firstRun){
+    secBirou = EepromCeas.GetMemory(birouAdd);
+    minAlarma = EepromCeas.GetMemory(minAdd);
+    oraAlarma = EepromCeas.GetMemory(oraAdd);
+    ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
+  firstRun = false;
+  }
   
   ventilatieAuto();
    
@@ -282,15 +286,30 @@ void loop() {
   butonEnter.loop();
   butonFata.loop();
 
-  if(alarma == true)
+  alarmare();
+
+  if(repetare == false)
+    ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
+  
+  server.processNextRequest();
+
+}
+
+void alarmare(){
+    if(alarma == true)
   {
     if(oraNow == oraAlarma && minNow == minAlarma)
      {
       if(repetare == false)
         alarmaActiva = true;
      }
-     else
+     else if(secBirou/1000 == 0 && repetare == true && EepromCeas.GetMemory(birouAdd)!=0)
+     {
+      tone(BUZZ, 500, 10000);
+      secBirou = EepromCeas.GetMemory(birouAdd);
+      ESPUI.print(webAlarmTimer, String(secBirou/1000));
       repetare = false;
+     }
       
     if(alarmaActiva == true)
     {
@@ -300,13 +319,32 @@ void loop() {
           alarmaActiva = false;
           Serial.println("Alarma inchisa");
         }
-
       tone(BUZZ, 1500,2000);
     }
+
+    if(repetare == true)
+    {
+      timpBirou();
+    }
+  }
+
+}
+
+void timpBirou(){
+  unsigned long milisecundeBirou = millis();
+  if(timerInceput = false)
+  {
+    milisecundeTrecut = milisecundeBirou;
+    timerInceput = true;
   }
   
-  server.processNextRequest();
+  if(milisecundeBirou - milisecundeTrecut >= 1000 && secBirou/1000>0)
+  {
+    milisecundeTrecut = milisecundeBirou;
+    secBirou-=1000;
+    }
 
+  ESPUI.print(webAlarmTimer, String(secBirou/1000));
 }
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
