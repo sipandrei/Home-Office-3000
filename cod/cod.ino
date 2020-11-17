@@ -1,4 +1,3 @@
-// pauza masa
 // de adaugat afisare oled
 // de adaugat calculare faze soare
 
@@ -49,12 +48,12 @@ int webVent, webVentNum;
 int webTimp;
 int webAlarmOra, oraNow;
 int webAlarmMin, minNow;
-int webAlarmSwitch, webAlarm, webAlarmTimer, secBirou;
+int webAlarmSwitch, webAlarm, webAlarmTimer, webPauza, secBirou, pauzaSec = 0, pauzaMin = 0; //se memoreaza secundele din pauza de masa
 int webOra, webMin, webSec;
-bool vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false, timerInceput = false, firstRun = true;
+bool vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false, timerInceput = false, firstRun = true, inPauza = false;
 uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28;
 uint16_t minAdd = 32, oraAdd = 64, birouAdd = 10;
-unsigned long milisecundeTrecut;
+unsigned long milisecundeTrecut, milisecundeTrecutPauza = 0;
 
 //declarare module I2C
 RtcDS3231<TwoWire> Ceas(Wire);
@@ -115,15 +114,33 @@ void ventilatieAuto()
 
 void pornireVentButon(Button2& btn)
 {
-  //de adaugat pagina
   if(btn == butonEnter)
    {
     anulare = true;
+   }
+  //de adaugat pagina
+  if(btn == butonEnter)
+   {
     Serial.println("Buton enter apasat"); 
     if(vent == LOW)
       vent = HIGH;
       else
       vent = LOW;}
+
+   if(btn == butonEnter)
+   {
+    Serial.println("Buton enter apasat"); 
+    if(inPauza == false)
+    {
+      inPauza = true;
+      pauzaMin = 0;
+      pauzaSec = 0;
+      }
+    else
+    {
+      inPauza = false;
+      }
+    }
 }
 
 // Configurare alarma
@@ -164,6 +181,9 @@ void timerBirou(Control *sender, int value){
   secBirou = sender->value.toInt()*1000;
   EepromCeas.SetMemory(birouAdd,secBirou);
 }
+void afisarePauzaMasa( Control* sender, int value){
+      ESPUI.print(webPauza,String(pauzaMin) + ":" + String(pauzaSec));
+  }
 
 //Ajustare ceas
 int ora = 0,minu = 0,sec = 0;
@@ -198,7 +218,8 @@ void setup() {
   Serial.println("Server initializat");
 
   Wire.begin();
-
+  EepromCeas.Begin(); 
+  
   uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Ventilatie", "Ventilatie");
   uint16_t tabMediu = ESPUI.addControl(ControlType::Tab, "Mediu", "Mediu");
   uint16_t tabAlarm = ESPUI.addControl(ControlType::Tab, "Alarma", "Alarma");
@@ -218,7 +239,8 @@ void setup() {
   webAlarmSwitch = ESPUI.addControl(ControlType::Switcher, "Stare alarma", "", ControlColor::Emerald, tabAlarm, &activareAlarma);
   webAlarmTimer = ESPUI.addControl(ControlType::Number, "Introduceti numarul de secunde pentru a ajunge la birou", String(EepromCeas.GetMemory(birouAdd)), ControlColor::Emerald, tabAlarm, &timerBirou);
   webAlarm = ESPUI.addControl(ControlType::Label, "Timp Alarma", "", ControlColor::Emerald, tabAlarm, &timpAlarma);
-
+  webPauza = ESPUI.addControl(ControlType::Label, "Timp petrecut in pauza de masa", "", ControlColor::Emerald, tabAlarm, &afisarePauzaMasa);
+   
   //tabCeas
   webOra = ESPUI.addControl(ControlType::Number, "Ore", "", ControlColor::Carrot, tabCeas, &ajustareOra);
   webMin = ESPUI.addControl(ControlType::Number, "Minute", "", ControlColor::Carrot, tabCeas, &ajustareMinut);
@@ -246,7 +268,7 @@ void setup() {
       Ceas.SetDateTime(RtcDateTime(__DATE__, __TIME__));
     }
   }
-  EepromCeas.Begin();
+  
   dht.begin();
   
   Ceas.Enable32kHzPin(false);
@@ -276,6 +298,7 @@ void loop() {
     secBirou = EepromCeas.GetMemory(birouAdd);
     minAlarma = EepromCeas.GetMemory(minAdd);
     oraAlarma = EepromCeas.GetMemory(oraAdd);
+    ESPUI.print(webPauza,String(pauzaMin) + ":" + String(pauzaSec));
     ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
   firstRun = false;
   }
@@ -287,6 +310,7 @@ void loop() {
   butonFata.loop();
 
   alarmare();
+  mancand();
 
   if(repetare == false)
     ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
@@ -332,7 +356,7 @@ void alarmare(){
 
 void timpBirou(){
   unsigned long milisecundeBirou = millis();
-  if(timerInceput = false)
+  if(timerInceput == false)
   {
     milisecundeTrecut = milisecundeBirou;
     timerInceput = true;
@@ -363,4 +387,25 @@ void printTimp(const RtcDateTime& dt)
   oraNow = dt.Hour();
   minNow = dt.Minute();
   ESPUI.print(webTimp, datestring);
+}
+
+void mancand(){
+ if(inPauza == true)
+ {
+    unsigned long milisecundePauza = millis();
+    
+    if(milisecundePauza - milisecundeTrecutPauza >= 1000)
+    {
+    milisecundeTrecutPauza = milisecundePauza;
+    pauzaSec++;
+    }
+    
+    if(pauzaSec>=60)
+    {
+      pauzaSec=0;
+      ++pauzaMin;
+    } 
+    ESPUI.print(webPauza,String(pauzaMin) + ":" + String(pauzaSec));
+  }
+ 
 }
