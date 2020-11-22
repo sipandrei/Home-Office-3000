@@ -2,18 +2,25 @@
 // de adaugat calculare faze soare
 
 #include <Button2.h>
+#include <cmath> 
+
 #include <RtcDateTime.h>
 #include <RtcDS3231.h>
 #include <RtcUtility.h>
+
 #include <DHT.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <NTPtimeESP.h>
+
 #include <DNSServer.h>
 #include <ESPUI.h>
 #include <EepromAT24C32.h>
+
+#include <sunset.h>
+#include <TimeLib.h>
 
 // Declarare pini
 #define BUZZ 15
@@ -46,23 +53,25 @@ int webUmi;
 int webLum;
 int webVent, webVentNum;
 int webTimp;
-int webAlarmOra, oraNow;
-int webAlarmMin, minNow;
+int webAlarmOra, oraacum;
+int webAlarmMin, minacum;
 int webAlarmSwitch, webAlarm, webAlarmTimer, webPauza, secBirou, pauzaSec = 0, pauzaMin = 0; //se memoreaza secundele din pauza de masa
-int webOra, webMin, webSec;
+int webOra, webMin, webSec, webLat, webLon, webUtc, webApus, webRasarit;
 bool vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false, timerInceput = false, firstRun = true, inPauza = false;
-uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28;
+uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28, ziCurenta;
 uint16_t minAdd = 32, oraAdd = 64, birouAdd = 10;
 unsigned long milisecundeTrecut, milisecundeTrecutPauza = 0;
 
-//declarare module I2C
+//declarare module 
 RtcDS3231<TwoWire> Ceas(Wire);
 EepromAt24c32<TwoWire> EepromCeas(Wire);
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
-RtcDateTime now = Ceas.GetDateTime();
+RtcDateTime acum = Ceas.GetDateTime();
 
-//variabile pozitie solara
-
+// variabile locatie
+float latitudine, longitudine;
+int UTC = 2, latAdd = 128, lonAdd = 140, utcAdd = 100;
+SunSet sun;
 
 // Preluare temperatura si umiditate
 #define SIGdht 0
@@ -189,19 +198,43 @@ void afisarePauzaMasa( Control* sender, int value){
 int ora = 0,minu = 0,sec = 0;
 void ajustareOra( Control* sender, int value){
   ora = sender->value.toInt();
-  Ceas.SetDateTime(RtcDateTime(now.Year(), now.Month(), now.Day(), ora, minu, sec));
+  Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minu, sec));
   Serial.println(ora+":");
 }
 void ajustareMinut( Control* sender, int value){
   minu = sender->value.toInt();
-  Ceas.SetDateTime(RtcDateTime(now.Year(), now.Month(), now.Day(), ora, minu, sec));
+  Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minu, sec));
   Serial.print(minu+":");
 }
 void ajustareSecunda( Control* sender, int value){
    sec = sender->value.toInt();
-   Ceas.SetDateTime(RtcDateTime(now.Year(), now.Month(), now.Day(), ora, minu, sec));
+   Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minu, sec));
    Serial.print(sec);
 }
+
+void ajustareLatitudine( Control* sender, int value){
+  latitudine = sender->value.toFloat();
+  sun.setPosition(latitudine, longitudine, UTC);
+  sun.setTZOffset(UTC);
+  EepromCeas.SetMemory(latAdd, latitudine);
+}
+void ajustareLongitudine( Control* sender, int value){
+  longitudine = sender->value.toFloat();
+  sun.setPosition(latitudine, longitudine, UTC);
+  sun.setTZOffset(UTC);
+  EepromCeas.SetMemory(lonAdd, longitudine);
+}
+void ajustareZona( Control* sender, int value){
+  UTC = sender->value.toInt();
+  if(UTC > 0)
+      UTC-=2*UTC; 
+    else
+      UTC = abs(UTC);
+  sun.setPosition(latitudine, longitudine, UTC);
+  sun.setTZOffset(UTC);
+  EepromCeas.SetMemory(utcAdd, UTC);
+}
+
 
 void setup() {
   secBirou = EepromCeas.GetMemory(10)*1000;
@@ -220,18 +253,17 @@ void setup() {
   Wire.begin();
   EepromCeas.Begin(); 
   
-  uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Ventilatie", "Ventilatie");
-  uint16_t tabMediu = ESPUI.addControl(ControlType::Tab, "Mediu", "Mediu");
+  uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Principal", "Principal");
   uint16_t tabAlarm = ESPUI.addControl(ControlType::Tab, "Alarma", "Alarma");
-  uint16_t tabCeas = ESPUI.addControl(ControlType::Tab, "Ajustare Ceas", "Ajustare Ceas");
+  uint16_t tabCeas = ESPUI.addControl(ControlType::Tab, "Ajustare Ceas si Locatie", "Ajustare Ceas si Locatie");
 
-  //tabVentilatie
-  webVent = ESPUI.addControl(ControlType::Switcher, "Control Ventilatie", "", ControlColor::Peterriver, tabCtrl, &controlVentilatie);
-  webVentNum = ESPUI.addControl(ControlType::Number, "Introduceti temperatura la care porneste ventilatorul", String(numVent), ControlColor::Peterriver, tabCtrl, &tempVentilatie);
-
-  //tabMediu
-  webTemp = ESPUI.addControl(ControlType::Label, "Temperatura", "", ControlColor::Wetasphalt, tabMediu);
-  webUmi = ESPUI.addControl(ControlType::Label, "Umiditate", "", ControlColor::Wetasphalt, tabMediu);
+  //tabPrincipal
+  webVent = ESPUI.addControl(ControlType::Switcher, "Control Ventilatie", "", ControlColor::Wetasphalt, tabCtrl, &controlVentilatie);
+  webVentNum = ESPUI.addControl(ControlType::Number, "Introduceti temperatura la care porneste ventilatorul", String(numVent), ControlColor::Wetasphalt, tabCtrl, &tempVentilatie);
+  webTemp = ESPUI.addControl(ControlType::Label, "Temperatura", "", ControlColor::Wetasphalt, tabCtrl);
+  webUmi = ESPUI.addControl(ControlType::Label, "Umiditate", "", ControlColor::Wetasphalt, tabCtrl);
+  webRasarit = ESPUI.addControl(ControlType::Label, "Rasarit", "", ControlColor::Wetasphalt, tabCtrl);
+  webApus = ESPUI.addControl(ControlType::Label, "Apus", "", ControlColor::Wetasphalt, tabCtrl);
 
   //tabAlarm
   webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma", "", ControlColor::Emerald, tabAlarm, &inputOraAlarma);
@@ -246,6 +278,9 @@ void setup() {
   webMin = ESPUI.addControl(ControlType::Number, "Minute", "", ControlColor::Carrot, tabCeas, &ajustareMinut);
   webSec = ESPUI.addControl(ControlType::Number, "Secunde", "", ControlColor::Carrot, tabCeas, &ajustareSecunda);
   webTimp = ESPUI.addControl(ControlType::Label, "Ora", "", ControlColor::Carrot, tabCeas);
+  webLat = ESPUI.addControl(ControlType::Text, "Latitudine", "", ControlColor::Carrot, tabCeas, &ajustareLatitudine);
+  webLon = ESPUI.addControl(ControlType::Text, "Longitudine", "", ControlColor::Carrot, tabCeas, &ajustareLongitudine);
+  webUtc = ESPUI.addControl(ControlType::Text, "Zona de timp (UTC)", "", ControlColor::Carrot, tabCeas, &ajustareZona);
 
   ESPUI.begin("Desk Link");
   
@@ -277,7 +312,14 @@ void setup() {
   //adrese ora si minut alarma
   EepromCeas.SetMemory(0, minAdd);
   EepromCeas.SetMemory(1,oraAdd);
-  
+
+  latitudine = EepromCeas.GetMemory(latAdd);
+  longitudine = EepromCeas.GetMemory(latAdd);
+  UTC = EepromCeas.GetMemory(utcAdd);
+
+  sun.setPosition(latitudine, longitudine, UTC);
+  sun.setTZOffset(UTC);
+    
   pinMode(LED, OUTPUT);
   pinMode(BUZZ, OUTPUT);
   pinMode(VENT, OUTPUT);
@@ -288,10 +330,10 @@ void setup() {
 }
 
 void loop() {
-  now = Ceas.GetDateTime();
+  acum = Ceas.GetDateTime();
   ESPUI.print(webTemp, String(dht.readTemperature()) + " °C");
   ESPUI.print(webUmi, String(dht.readHumidity()) + " %");
-  printTimp(now);
+  printTimp(acum);
    
   //citire ora si minut alarma
   if(firstRun){
@@ -302,6 +344,10 @@ void loop() {
     ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
   firstRun = false;
   }
+
+  if(ziCurenta != day()){
+    sun.setCurrentDate(year(), month(), day());
+  }
   
   ventilatieAuto();
    
@@ -311,6 +357,7 @@ void loop() {
 
   alarmare();
   mancand();
+  soare();
 
   if(repetare == false)
     ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
@@ -322,7 +369,7 @@ void loop() {
 void alarmare(){
     if(alarma == true)
   {
-    if(oraNow == oraAlarma && minNow == minAlarma)
+    if(oraacum == oraAlarma && minacum == minAlarma)
      {
       if(repetare == false)
         alarmaActiva = true;
@@ -384,8 +431,9 @@ void printTimp(const RtcDateTime& dt)
              dt.Minute(),
              dt.Second() );
 
-  oraNow = dt.Hour();
-  minNow = dt.Minute();
+  oraacum = dt.Hour();
+  minacum = dt.Minute();
+  ziCurenta = dt.Day();
   ESPUI.print(webTimp, datestring);
 }
 
@@ -408,4 +456,12 @@ void mancand(){
     ESPUI.print(webPauza,String(pauzaMin) + ":" + String(pauzaSec));
   }
  
+}
+
+void soare(){
+  int apus, rasarit;
+  rasarit = abs(static_cast<int>(sun.calcSunrise()));
+  apus = static_cast<int>(sun.calcSunset());
+  ESPUI.print(webRasarit, String(rasarit/60)+":"+String(rasarit%60)+" am");
+  ESPUI.print(webApus, String(apus/60)+":"+String(apus%60)+" pm");
 }
