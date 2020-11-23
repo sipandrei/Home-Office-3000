@@ -1,9 +1,5 @@
-<<<<<<< Updated upstream
-// de adaugat afisare oled
-=======
 // de terminat paginile 
 //optional - inchidere ecran
->>>>>>> Stashed changes
 
 #include <Button2.h>
 #include <cmath> 
