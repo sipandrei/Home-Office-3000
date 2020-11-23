@@ -1,4 +1,9 @@
+<<<<<<< Updated upstream
 // de adaugat afisare oled
+=======
+// de terminat paginile 
+//optional - inchidere ecran
+>>>>>>> Stashed changes
 
 #include <Button2.h>
 #include <cmath> 
@@ -10,8 +15,7 @@
 #include <DHT.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <SSD1306Wire.h>
 #include <NTPtimeESP.h>
 
 #include <DNSServer.h>
@@ -53,7 +57,7 @@ int webLum;
 int webVent, webVentNum;
 int webTimp;
 int webAlarmOra, oraacum;
-int webAlarmMin, minacum;
+int webAlarmMin, minacum, secacum;
 int webAlarmSwitch, webAlarm, webAlarmTimer, webPauza, secBirou, pauzaSec = 0, pauzaMin = 0; //se memoreaza secundele din pauza de masa
 int webOra, webMin, webSec, webLat, webLon, webUtc, webApus, webRasarit;
 bool vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false, timerInceput = false, firstRun = true, inPauza = false;
@@ -61,10 +65,13 @@ uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28, ziCurenta;
 uint16_t minAdd = 32, oraAdd = 64, birouAdd = 10;
 unsigned long milisecundeTrecut, milisecundeTrecutPauza = 0;
 
+//variabile afisare
+int pagina = 1;
+
 //declarare module 
 RtcDS3231<TwoWire> Ceas(Wire);
 EepromAt24c32<TwoWire> EepromCeas(Wire);
-Adafruit_SSD1306 display(128, 64, &Wire, -1);
+SSD1306Wire display(0x3c, SDA, SCL);
 RtcDateTime acum = Ceas.GetDateTime();
 
 // variabile locatie
@@ -83,6 +90,69 @@ int luminozitate() {
   float RLDR = (R * (VIN - Vout)) / Vout;
   int luxi = 500 / (RLDR / 1000);
   return luxi;
+}
+
+//afisare
+void SchimbarePag()
+{
+    if(pagina<1)
+      pagina = 3;
+       else if(pagina>3)
+      pagina = 1;
+  
+  
+    switch(pagina)
+    {
+      case 1:
+        pagina1();
+        break;
+      case 2:
+        pagina2();
+        break;
+      case 3:
+        pagina3();
+        break;
+    }
+}
+
+void pagina1(){
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_16);
+  display.drawHorizontalLine(0,18,128);
+  display.drawString(64, 22, String(oraacum)+" : "+String(minacum)+" : "+String(secacum));
+  display.drawHorizontalLine(0,44,128);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(64,3,String(pauzaMin)+":"+String(pauzaSec));
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(0,3,"Pauza");
+  display.fillCircle(57,60,2);
+  display.drawCircle(64,60,2);
+  display.drawCircle(71,60,2);
+}
+void pagina2(){
+  display.drawCircle(57,60,2);
+  display.fillCircle(64,60,2);
+  display.drawCircle(71,60,2);
+}
+void pagina3(){
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(0,10,"Alarma");
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_16);  
+  display.drawString(64, 10,String(oraAlarma)+" : "+ String(minAlarma));
+  display.drawHorizontalLine(0,30,128);
+  display.drawString(64,37, "192.168.4.1");
+  display.drawCircle(57,60,2);
+  display.drawCircle(64,60,2);
+  display.fillCircle(71,60,2);
+}
+
+void paginaSpate(Button2& btn){
+  pagina--; display.clear();
+}
+void paginaFata(Button2& btn){
+  pagina++; display.clear();
 }
 
 // Functii interfata web
@@ -127,7 +197,7 @@ void pornireVentButon(Button2& btn)
     anulare = true;
    }
   //de adaugat pagina
-  if(btn == butonEnter)
+  if(btn == butonEnter && oraacum != oraAlarma && minacum != minAlarma && pagina == 2)
    {
     Serial.println("Buton enter apasat"); 
     if(vent == LOW)
@@ -135,7 +205,7 @@ void pornireVentButon(Button2& btn)
       else
       vent = LOW;}
 
-   if(btn == butonEnter)
+   if(btn == butonEnter && oraacum != oraAlarma && minacum != minAlarma && pagina == 1)
    {
     Serial.println("Buton enter apasat"); 
     if(inPauza == false)
@@ -185,6 +255,7 @@ void activareAlarma(Control *sender, int value)
       break;
   }
 }
+
 void timerBirou(Control *sender, int value){
   secBirou = sender->value.toInt()*1000;
   EepromCeas.SetMemory(birouAdd,secBirou);
@@ -283,8 +354,12 @@ void setup() {
 
   ESPUI.begin("Desk Link");
   
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  display.clearDisplay();
+  //initializare ecran
+  display.init();
+  display.clear();
+  display.flipScreenVertically();
+  display.setFont(ArialMT_Plain_16);
+
 
   Ceas.Begin();
   if (!Ceas.IsDateTimeValid())
@@ -325,7 +400,8 @@ void setup() {
   digitalWrite(BUZZ, LOW);
   
   butonEnter.setTapHandler(pornireVentButon);
-  
+  butonFata.setTapHandler(paginaFata);
+  butonSpate.setTapHandler(paginaSpate);
 }
 
 void loop() {
@@ -357,10 +433,13 @@ void loop() {
   alarmare();
   mancand();
   soare();
+  SchimbarePag();
+  display.display();
 
   if(repetare == false)
     ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
-  
+
+  display.clear();
   server.processNextRequest();
 
 }
@@ -432,6 +511,7 @@ void printTimp(const RtcDateTime& dt)
 
   oraacum = dt.Hour();
   minacum = dt.Minute();
+  secacum = dt.Second();
   ziCurenta = dt.Day();
   ESPUI.print(webTimp, datestring);
 }
