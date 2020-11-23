@@ -1,5 +1,4 @@
 // de adaugat afisare oled
-// de adaugat calculare faze soare
 
 #include <Button2.h>
 #include <cmath> 
