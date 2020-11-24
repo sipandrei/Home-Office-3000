@@ -166,11 +166,15 @@ void pagina4(){
 
 void pornireEcran()
 {
-  if((millis() - debounce) > 50)
-  {
-    if(digitalRead(oprireAlarma1) == HIGH && digitalRead(oprireAlarma2) == HIGH && oraacum != oraAlarma && minacum != minAlarma)
-      ecran = !ecran, debounce = millis();
-  }
+    if((millis() - debounce) > 50)
+    {
+    if(digitalRead(oprireAlarma1) == HIGH && digitalRead(oprireAlarma2) == HIGH && oraacum != oraAlarma && minacum != minAlarma) 
+      if(ecran == false)
+        ecran = true;
+       else
+        ecran = false;
+       debounce = millis();
+    }
     if(ecran == false)
       display.displayOff();
     else
@@ -529,7 +533,7 @@ void alarmare(){
 
 void timpBirou(){
   unsigned long milisecundeBirou = millis();
-  if(timerInceput == false)
+  if(timerInceput == false && secBirou == 0)
   {
     milisecundeTrecut = milisecundeBirou;
     timerInceput = true;
@@ -540,7 +544,10 @@ void timpBirou(){
     milisecundeTrecut = milisecundeBirou;
     secBirou-=1000;
     }
-
+  if(timerInceput == true && secBirou == 0)
+  {
+    timerInceput = false, tone(BUZZ, 500, 500), secBirou = EepromCeas.GetMemory(birouAdd);;
+  }
   ESPUI.print(webAlarmTimer, String(secBirou/1000));
 }
 
