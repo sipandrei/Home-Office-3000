@@ -92,8 +92,8 @@ int luminozitate() {
 void SchimbarePag()
 {
     if(pagina<1)
-      pagina = 3;
-       else if(pagina>3)
+      pagina = 4;
+       else if(pagina>4)
       pagina = 1;
   
   
@@ -108,6 +108,9 @@ void SchimbarePag()
       case 3:
         pagina3();
         break;
+      case 4: 
+        pagina4();
+        break;
     }
 }
 
@@ -121,31 +124,44 @@ void pagina1(){
   display.drawString(64,3,String(pauzaMin)+":"+String(pauzaSec));
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0,3,"Pauza");
-  display.fillCircle(57,60,2);
-  display.drawCircle(64,60,2);
-  display.drawCircle(71,60,2);
+  display.fillCircle(54,60,2);
+  display.drawCircle(61,60,2);
+  display.drawCircle(67,60,2);
+  display.drawCircle(74,60,2);
 }
 void pagina2(){
-  display.drawCircle(57,60,2);
-  display.fillCircle(64,60,2);
-  display.drawCircle(71,60,2);
+  display.drawCircle(54,60,2);
+  display.fillCircle(61,60,2);
+  display.drawCircle(67,60,2);
+  display.drawCircle(74,60,2);
 }
 void pagina3(){
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0,10,"Alarma");
+  display.drawString(0,37,"T.Birou");
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_16);  
   display.drawString(64, 9,String(oraAlarma)+" : "+ String(minAlarma));
   display.drawHorizontalLine(0,30,128);
-  display.drawString(64,37, "192.168.4.1");
-  display.drawCircle(57,60,2);
-  display.drawCircle(64,60,2);
-  display.fillCircle(71,60,2);
+  display.drawString(64,37, String(secBirou/1000));
+  display.drawCircle(54,60,2);
+  display.drawCircle(61,60,2);
+  display.fillCircle(67,60,2);
+  display.drawCircle(74,60,2);
   if(alarma == true)
     display.fillCircle(123,16,2);
   else
     display.drawCircle(123,16,2);
+}
+void pagina4(){
+  display.setFont(ArialMT_Plain_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(64,22, "192.168.4.1");
+  display.drawCircle(54,60,2);
+  display.drawCircle(61,60,2);
+  display.drawCircle(67,60,2);
+  display.fillCircle(74,60,2);
 }
 
 void pornireEcran()
