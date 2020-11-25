@@ -1,4 +1,5 @@
-// de adaugat afisare oled
+// de terminat paginile 
+//optional - inchidere ecran
 
 #include <Button2.h>
 #include <cmath> 
@@ -10,8 +11,7 @@
 #include <DHT.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <SSD1306Wire.h>
 #include <NTPtimeESP.h>
 
 #include <DNSServer.h>
@@ -53,18 +53,23 @@ int webLum;
 int webVent, webVentNum;
 int webTimp;
 int webAlarmOra, oraacum;
-int webAlarmMin, minacum;
-int webAlarmSwitch, webAlarm, webAlarmTimer, webPauza, secBirou, pauzaSec = 0, pauzaMin = 0; //se memoreaza secundele din pauza de masa
-int webOra, webMin, webSec, webLat, webLon, webUtc, webApus, webRasarit;
-bool vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false, timerInceput = false, firstRun = true, inPauza = false;
+int webAlarmMin, minacum, secacum;
+int webAlarmSwitch, webAlarmStare, webAlarm, webAlarmTimer, webPauza, secBirou, pauzaSec = 0, pauzaMin = 0; //se memoreaza secundele din pauza de masa
+int webAn, webLuna, webOra, webMin, webSec, webLat, webLon, webUtc, webApus, webRasarit;
+bool ecran = true, vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false, timerInceput = false, firstRun = true, inPauza = false;
 uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28, ziCurenta;
 uint16_t minAdd = 32, oraAdd = 64, birouAdd = 10;
-unsigned long milisecundeTrecut, milisecundeTrecutPauza = 0;
+unsigned long milisecundeTrecut, milisecundeTrecutPauza = 0, debounce = 0;
+
+int tempe, humi, timer = 100, r, a, an, luna;
+
+//variabile afisare
+int pagina = 1;
 
 //declarare module 
 RtcDS3231<TwoWire> Ceas(Wire);
 EepromAt24c32<TwoWire> EepromCeas(Wire);
-Adafruit_SSD1306 display(128, 64, &Wire, -1);
+SSD1306Wire display(0x3c, SDA, SCL);
 RtcDateTime acum = Ceas.GetDateTime();
 
 // variabile locatie
@@ -77,12 +82,130 @@ SunSet sun;
 DHT dht(SIGdht, DHT11);
 
 // Luminozitate
+long long raw, luxi;
+double Vout, RLDR;
 int luminozitate() {
-  int raw = analogRead(LDR);
-  float Vout = float(raw) * (VIN / float(1023));
-  float RLDR = (R * (VIN - Vout)) / Vout;
-  int luxi = 500 / (RLDR / 1000);
+  timer--;
+  if(timer<=0)
+  {
+    raw = analogRead(LDR);
+    Vout = double(raw) * (VIN / double(1023));
+    RLDR = (R * (VIN - Vout)) / Vout;
+    luxi = 500 / (RLDR / 1000);
+    timer = 100;
+  }
   return luxi;
+}
+
+//afisare
+void SchimbarePag()
+{
+    if(pagina<1)
+      pagina = 4;
+       else if(pagina>4)
+      pagina = 1;
+  
+  
+    switch(pagina)
+    {
+      case 1:
+        pagina1();
+        break;
+      case 2:
+        pagina2();
+        break;
+      case 3:
+        pagina3();
+        break;
+      case 4: 
+        pagina4();
+        break;
+    }
+}
+
+void pagina1(){
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_16);
+  display.drawHorizontalLine(0,18,128);
+  display.drawString(64, 22, String(oraacum)+" : "+String(minacum)+" : "+String(secacum));
+  display.drawHorizontalLine(0,44,128);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(64,3,String(pauzaMin)+":"+String(pauzaSec));
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(0,3,"Pauza");
+  display.drawCircle(54,62,1);
+  display.fillCircle(61,62,1);
+  display.fillCircle(67,62,1);
+  display.fillCircle(74,62,1);
+}
+void pagina2(){
+  display.drawVerticalLine(64,0,40);
+  display.drawHorizontalLine(0,15,128);
+  display.drawHorizontalLine(0,40,128);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(32,20,String(tempe)+"°C");
+  display.drawString(96,20,String(humi)+"%");
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(32,2,String(r/60)+":"+String(r%60)+"am");
+  display.drawString(96,2,String(a/60)+":"+String(a%60)+"pm");
+  display.drawString(64,45,String(luminozitate())+" lux");
+  display.fillCircle(54,62,1);
+  display.drawCircle(61,62,1);
+  display.fillCircle(67,62,1);
+  display.fillCircle(74,62,1);
+}
+void pagina3(){
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(0,10,"Alarma");
+  display.drawString(0,37,"T.Birou");
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_16);  
+  display.drawString(64, 9,String(oraAlarma)+" : "+ String(minAlarma));
+  display.drawHorizontalLine(0,30,128);
+  display.drawString(64,37, String(secBirou/1000));
+  display.fillCircle(54,62,1);
+  display.fillCircle(61,62,1);
+  display.drawCircle(67,62,1);
+  display.fillCircle(74,62,1);
+  if(alarma == true)
+    display.fillCircle(123,16,2);
+  else
+    display.drawCircle(123,16,2);
+}
+void pagina4(){
+  display.setFont(ArialMT_Plain_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(64,22, "192.168.4.1");
+  display.fillCircle(54,62,1);
+  display.fillCircle(61,62,1);
+  display.fillCircle(67,62,1);
+  display.drawCircle(74,62,1);
+}
+
+void pornireEcran()
+{
+    if((millis() - debounce) > 50)
+    {
+    if(digitalRead(oprireAlarma1) == HIGH && digitalRead(oprireAlarma2) == HIGH && oraacum != oraAlarma && minacum != minAlarma) 
+      if(ecran == false)
+        ecran = true;
+       else
+        ecran = false;
+       debounce = millis();
+    }
+    if(ecran == false)
+      display.displayOff();
+    else
+      display.displayOn();
+}
+
+void paginaSpate(Button2& btn){
+  pagina--; display.clear();
+}
+void paginaFata(Button2& btn){
+  pagina++; display.clear();
 }
 
 // Functii interfata web
@@ -126,17 +249,10 @@ void pornireVentButon(Button2& btn)
    {
     anulare = true;
    }
-  //de adaugat pagina
-  if(btn == butonEnter)
-   {
-    Serial.println("Buton enter apasat"); 
-    if(vent == LOW)
-      vent = HIGH;
-      else
-      vent = LOW;}
-
-   if(btn == butonEnter)
-   {
+  switch (pagina){
+    case 1:
+    if(btn == butonEnter)
+    {
     Serial.println("Buton enter apasat"); 
     if(inPauza == false)
     {
@@ -149,9 +265,34 @@ void pornireVentButon(Button2& btn)
       inPauza = false;
       }
     }
+    break;
+    
+    case 2:
+    if(btn == butonEnter)
+    {
+    Serial.println("Buton enter apasat"); 
+    if(vent == LOW)
+      vent = HIGH;
+      else
+      vent = LOW;}
+    break;
+    
+    case 3:
+    if(btn == butonEnter)
+    {
+      alarma = !alarma;
+    }
+    break;
+  }
 }
 
 // Configurare alarma
+void stareAlarma(Control* sender, int value){
+  if(alarma == true)
+    ESPUI.print(webAlarmStare, "Alarma Activata!");
+  else
+    ESPUI.print(webAlarmStare, "Alarma Dezactivata!");
+}
 void timpAlarma( Control* sender, int value){
       ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
   }
@@ -172,19 +313,14 @@ void inputMinAlarma( Control* sender, int value) {
 void activareAlarma(Control *sender, int value)
 {
   switch (value) {
-    case S_ACTIVE:
-      alarma = true;
-      EepromCeas.SetMemory(3, 1);
-      Serial.println("Alarma activata!");
-      break;
-
-    case S_INACTIVE:
-      alarma = false;
-      EepromCeas.SetMemory(3, 0);
-      Serial.println("Alarma dezactivata!");
+    case B_DOWN:
+      alarma = !alarma;
+      EepromCeas.SetMemory(3, alarma);
+      Serial.println("Alarma -  stare schimbata!");
       break;
   }
 }
+
 void timerBirou(Control *sender, int value){
   secBirou = sender->value.toInt()*1000;
   EepromCeas.SetMemory(birouAdd,secBirou);
@@ -209,6 +345,14 @@ void ajustareSecunda( Control* sender, int value){
    sec = sender->value.toInt();
    Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minu, sec));
    Serial.print(sec);
+}
+void ajustareAn(Control* sender, int value){
+  an = sender->value.toInt();
+  Ceas.SetDateTime(RtcDateTime(an, acum.Month(), acum.Day(), ora, minu, sec));
+}
+void ajustareLuna(Control* sender, int value){
+  luna = sender->value.toInt();
+  Ceas.SetDateTime(RtcDateTime(acum.Year(), luna, acum.Day(), ora, minu, sec));
 }
 
 void ajustareLatitudine( Control* sender, int value){
@@ -267,24 +411,31 @@ void setup() {
   //tabAlarm
   webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma", "", ControlColor::Emerald, tabAlarm, &inputOraAlarma);
   webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma", "", ControlColor::Emerald, tabAlarm, &inputMinAlarma);
-  webAlarmSwitch = ESPUI.addControl(ControlType::Switcher, "Stare alarma", "", ControlColor::Emerald, tabAlarm, &activareAlarma);
+  webAlarmSwitch = ESPUI.addControl(ControlType::Button, "Activare alarma", "", ControlColor::Emerald, tabAlarm, &activareAlarma);
+  webAlarmStare = ESPUI.addControl(ControlType::Label, "Stare alarma", "", ControlColor::Emerald, tabAlarm, &stareAlarma);
   webAlarmTimer = ESPUI.addControl(ControlType::Number, "Introduceti numarul de secunde pentru a ajunge la birou", String(EepromCeas.GetMemory(birouAdd)), ControlColor::Emerald, tabAlarm, &timerBirou);
   webAlarm = ESPUI.addControl(ControlType::Label, "Timp Alarma", "", ControlColor::Emerald, tabAlarm, &timpAlarma);
   webPauza = ESPUI.addControl(ControlType::Label, "Timp petrecut in pauza de masa", "", ControlColor::Emerald, tabAlarm, &afisarePauzaMasa);
    
   //tabCeas
+  webTimp = ESPUI.addControl(ControlType::Label, "Ora", "", ControlColor::Carrot, tabCeas);
   webOra = ESPUI.addControl(ControlType::Number, "Ore", "", ControlColor::Carrot, tabCeas, &ajustareOra);
   webMin = ESPUI.addControl(ControlType::Number, "Minute", "", ControlColor::Carrot, tabCeas, &ajustareMinut);
   webSec = ESPUI.addControl(ControlType::Number, "Secunde", "", ControlColor::Carrot, tabCeas, &ajustareSecunda);
-  webTimp = ESPUI.addControl(ControlType::Label, "Ora", "", ControlColor::Carrot, tabCeas);
-  webLat = ESPUI.addControl(ControlType::Text, "Latitudine", "", ControlColor::Carrot, tabCeas, &ajustareLatitudine);
-  webLon = ESPUI.addControl(ControlType::Text, "Longitudine", "", ControlColor::Carrot, tabCeas, &ajustareLongitudine);
-  webUtc = ESPUI.addControl(ControlType::Text, "Zona de timp (UTC)", "", ControlColor::Carrot, tabCeas, &ajustareZona);
+  webAn = ESPUI.addControl(ControlType::Number, "An", "", ControlColor::Carrot, tabCeas, &ajustareAn);
+  webLuna = ESPUI.addControl(ControlType::Number, "Luna", "", ControlColor::Carrot, tabCeas, &ajustareLuna);
+  webLat = ESPUI.addControl(ControlType::Number, "Latitudine", "", ControlColor::Carrot, tabCeas, &ajustareLatitudine);
+  webLon = ESPUI.addControl(ControlType::Number, "Longitudine", "", ControlColor::Carrot, tabCeas, &ajustareLongitudine);
+  webUtc = ESPUI.addControl(ControlType::Number, "Zona de timp (UTC)", "", ControlColor::Carrot, tabCeas, &ajustareZona);
 
   ESPUI.begin("Desk Link");
   
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  display.clearDisplay();
+  //initializare ecran
+  display.init();
+  display.clear();
+  display.flipScreenVertically();
+  display.setFont(ArialMT_Plain_16);
+
 
   Ceas.Begin();
   if (!Ceas.IsDateTimeValid())
@@ -325,13 +476,16 @@ void setup() {
   digitalWrite(BUZZ, LOW);
   
   butonEnter.setTapHandler(pornireVentButon);
-  
+  butonFata.setTapHandler(paginaFata);
+  butonSpate.setTapHandler(paginaSpate);
 }
 
 void loop() {
   acum = Ceas.GetDateTime();
-  ESPUI.print(webTemp, String(dht.readTemperature()) + " °C");
-  ESPUI.print(webUmi, String(dht.readHumidity()) + " %");
+  tempe = dht.readTemperature();
+  humi = dht.readHumidity();
+  ESPUI.print(webTemp, String(tempe) + " °C");
+  ESPUI.print(webUmi, String(humi) + " %");
   printTimp(acum);
    
   //citire ora si minut alarma
@@ -344,8 +498,13 @@ void loop() {
   firstRun = false;
   }
 
+  if(alarma == true)
+    ESPUI.print(webAlarmStare, "Alarma Activata!");
+  else
+    ESPUI.print(webAlarmStare, "Alarma Dezactivata!");
+  
   if(ziCurenta != day()){
-    sun.setCurrentDate(year(), month(), day());
+    sun.setCurrentDate(an, luna, day());
   }
   
   ventilatieAuto();
@@ -357,10 +516,14 @@ void loop() {
   alarmare();
   mancand();
   soare();
+  SchimbarePag();
+  display.display();
+  pornireEcran();
 
   if(repetare == false)
     ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
-  
+
+  display.clear();
   server.processNextRequest();
 
 }
@@ -402,7 +565,7 @@ void alarmare(){
 
 void timpBirou(){
   unsigned long milisecundeBirou = millis();
-  if(timerInceput == false)
+  if(timerInceput == false && secBirou == 0)
   {
     milisecundeTrecut = milisecundeBirou;
     timerInceput = true;
@@ -413,7 +576,10 @@ void timpBirou(){
     milisecundeTrecut = milisecundeBirou;
     secBirou-=1000;
     }
-
+  if(timerInceput == true && secBirou == 0)
+  {
+    timerInceput = false, tone(BUZZ, 500, 500), secBirou = EepromCeas.GetMemory(birouAdd);;
+  }
   ESPUI.print(webAlarmTimer, String(secBirou/1000));
 }
 
@@ -432,7 +598,10 @@ void printTimp(const RtcDateTime& dt)
 
   oraacum = dt.Hour();
   minacum = dt.Minute();
+  secacum = dt.Second();
   ziCurenta = dt.Day();
+  an = dt.Year();
+  luna = dt.Month();
   ESPUI.print(webTimp, datestring);
 }
 
@@ -458,9 +627,11 @@ void mancand(){
 }
 
 void soare(){
-  int apus, rasarit;
+  int rasarit, apus;
   rasarit = abs(static_cast<int>(sun.calcSunrise()));
   apus = static_cast<int>(sun.calcSunset());
+  r = rasarit;
+  a = apus;
   ESPUI.print(webRasarit, String(rasarit/60)+":"+String(rasarit%60)+" am");
   ESPUI.print(webApus, String(apus/60)+":"+String(apus%60)+" pm");
 }
