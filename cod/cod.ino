@@ -333,26 +333,26 @@ void afisarePauzaMasa( Control* sender, int value){
 int ora = 0,minu = 0,sec = 0;
 void ajustareOra( Control* sender, int value){
   ora = sender->value.toInt();
-  Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minu, sec));
+  Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minacum, secacum));
   Serial.println(ora+":");
 }
 void ajustareMinut( Control* sender, int value){
   minu = sender->value.toInt();
-  Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minu, sec));
+  Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), oraacum, minu, secacum));
   Serial.print(minu+":");
 }
 void ajustareSecunda( Control* sender, int value){
    sec = sender->value.toInt();
-   Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minu, sec));
+   Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), oraacum, minacum, sec));
    Serial.print(sec);
 }
 void ajustareAn(Control* sender, int value){
   an = sender->value.toInt();
-  Ceas.SetDateTime(RtcDateTime(an, acum.Month(), acum.Day(), ora, minu, sec));
+  Ceas.SetDateTime(RtcDateTime(an, acum.Month(), acum.Day(), oraacum, minacum, secacum));
 }
 void ajustareLuna(Control* sender, int value){
   luna = sender->value.toInt();
-  Ceas.SetDateTime(RtcDateTime(acum.Year(), luna, acum.Day(), ora, minu, sec));
+  Ceas.SetDateTime(RtcDateTime(acum.Year(), luna, acum.Day(), oraacum, minacum, secacum));
 }
 
 void ajustareLatitudine( Control* sender, int value){
