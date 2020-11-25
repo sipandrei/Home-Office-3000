@@ -1,6 +1,3 @@
-// de terminat paginile 
-//optional - inchidere ecran
-
 #include <Button2.h>
 #include <cmath> 
 
@@ -245,10 +242,7 @@ void ventilatieAuto()
 
 void pornireVentButon(Button2& btn)
 {
-  if(btn == butonEnter)
-   {
-    anulare = true;
-   }
+  
   switch (pagina){
     case 1:
     if(btn == butonEnter)
@@ -274,7 +268,10 @@ void pornireVentButon(Button2& btn)
     if(vent == LOW)
       vent = HIGH;
       else
-      vent = LOW;}
+      vent = LOW;
+    if( dht.readTemperature() >= numVent)
+      anulare = true;
+   }
     break;
     
     case 3:
