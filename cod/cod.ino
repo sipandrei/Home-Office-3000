@@ -55,11 +55,13 @@ int webTimp;
 int webAlarmOra, oraacum;
 int webAlarmMin, minacum, secacum;
 int webAlarmSwitch, webAlarmStare, webAlarm, webAlarmTimer, webPauza, secBirou, pauzaSec = 0, pauzaMin = 0; //se memoreaza secundele din pauza de masa
-int webOra, webMin, webSec, webLat, webLon, webUtc, webApus, webRasarit;
+int webAn, webLuna, webOra, webMin, webSec, webLat, webLon, webUtc, webApus, webRasarit;
 bool ecran = true, vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false, timerInceput = false, firstRun = true, inPauza = false;
 uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28, ziCurenta;
 uint16_t minAdd = 32, oraAdd = 64, birouAdd = 10;
 unsigned long milisecundeTrecut, milisecundeTrecutPauza = 0, debounce = 0;
+
+int tempe, humi, timer = 100, r, a, an, luna;
 
 //variabile afisare
 int pagina = 1;
@@ -80,11 +82,18 @@ SunSet sun;
 DHT dht(SIGdht, DHT11);
 
 // Luminozitate
+long long raw, luxi;
+double Vout, RLDR;
 int luminozitate() {
-  int raw = analogRead(LDR);
-  float Vout = float(raw) * (VIN / float(1023));
-  float RLDR = (R * (VIN - Vout)) / Vout;
-  int luxi = 500 / (RLDR / 1000);
+  timer--;
+  if(timer<=0)
+  {
+    raw = analogRead(LDR);
+    Vout = double(raw) * (VIN / double(1023));
+    RLDR = (R * (VIN - Vout)) / Vout;
+    luxi = 500 / (RLDR / 1000);
+    timer = 100;
+  }
   return luxi;
 }
 
@@ -124,16 +133,27 @@ void pagina1(){
   display.drawString(64,3,String(pauzaMin)+":"+String(pauzaSec));
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0,3,"Pauza");
-  display.fillCircle(54,60,2);
-  display.drawCircle(61,60,2);
-  display.drawCircle(67,60,2);
-  display.drawCircle(74,60,2);
+  display.drawCircle(54,62,1);
+  display.fillCircle(61,62,1);
+  display.fillCircle(67,62,1);
+  display.fillCircle(74,62,1);
 }
 void pagina2(){
-  display.drawCircle(54,60,2);
-  display.fillCircle(61,60,2);
-  display.drawCircle(67,60,2);
-  display.drawCircle(74,60,2);
+  display.drawVerticalLine(64,0,40);
+  display.drawHorizontalLine(0,15,128);
+  display.drawHorizontalLine(0,40,128);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(32,20,String(tempe)+"°C");
+  display.drawString(96,20,String(humi)+"%");
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(32,2,String(r/60)+":"+String(r%60)+"am");
+  display.drawString(96,2,String(a/60)+":"+String(a%60)+"pm");
+  display.drawString(64,45,String(luminozitate())+" lux");
+  display.fillCircle(54,62,1);
+  display.drawCircle(61,62,1);
+  display.fillCircle(67,62,1);
+  display.fillCircle(74,62,1);
 }
 void pagina3(){
   display.setFont(ArialMT_Plain_10);
@@ -145,10 +165,10 @@ void pagina3(){
   display.drawString(64, 9,String(oraAlarma)+" : "+ String(minAlarma));
   display.drawHorizontalLine(0,30,128);
   display.drawString(64,37, String(secBirou/1000));
-  display.drawCircle(54,60,2);
-  display.drawCircle(61,60,2);
-  display.fillCircle(67,60,2);
-  display.drawCircle(74,60,2);
+  display.fillCircle(54,62,1);
+  display.fillCircle(61,62,1);
+  display.drawCircle(67,62,1);
+  display.fillCircle(74,62,1);
   if(alarma == true)
     display.fillCircle(123,16,2);
   else
@@ -158,10 +178,10 @@ void pagina4(){
   display.setFont(ArialMT_Plain_16);
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.drawString(64,22, "192.168.4.1");
-  display.drawCircle(54,60,2);
-  display.drawCircle(61,60,2);
-  display.drawCircle(67,60,2);
-  display.fillCircle(74,60,2);
+  display.fillCircle(54,62,1);
+  display.fillCircle(61,62,1);
+  display.fillCircle(67,62,1);
+  display.drawCircle(74,62,1);
 }
 
 void pornireEcran()
@@ -326,6 +346,14 @@ void ajustareSecunda( Control* sender, int value){
    Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minu, sec));
    Serial.print(sec);
 }
+void ajustareAn(Control* sender, int value){
+  an = sender->value.toInt();
+  Ceas.SetDateTime(RtcDateTime(an, acum.Month(), acum.Day(), ora, minu, sec));
+}
+void ajustareLuna(Control* sender, int value){
+  luna = sender->value.toInt();
+  Ceas.SetDateTime(RtcDateTime(acum.Year(), luna, acum.Day(), ora, minu, sec));
+}
 
 void ajustareLatitudine( Control* sender, int value){
   latitudine = sender->value.toFloat();
@@ -390,13 +418,15 @@ void setup() {
   webPauza = ESPUI.addControl(ControlType::Label, "Timp petrecut in pauza de masa", "", ControlColor::Emerald, tabAlarm, &afisarePauzaMasa);
    
   //tabCeas
+  webTimp = ESPUI.addControl(ControlType::Label, "Ora", "", ControlColor::Carrot, tabCeas);
   webOra = ESPUI.addControl(ControlType::Number, "Ore", "", ControlColor::Carrot, tabCeas, &ajustareOra);
   webMin = ESPUI.addControl(ControlType::Number, "Minute", "", ControlColor::Carrot, tabCeas, &ajustareMinut);
   webSec = ESPUI.addControl(ControlType::Number, "Secunde", "", ControlColor::Carrot, tabCeas, &ajustareSecunda);
-  webTimp = ESPUI.addControl(ControlType::Label, "Ora", "", ControlColor::Carrot, tabCeas);
-  webLat = ESPUI.addControl(ControlType::Text, "Latitudine", "", ControlColor::Carrot, tabCeas, &ajustareLatitudine);
-  webLon = ESPUI.addControl(ControlType::Text, "Longitudine", "", ControlColor::Carrot, tabCeas, &ajustareLongitudine);
-  webUtc = ESPUI.addControl(ControlType::Text, "Zona de timp (UTC)", "", ControlColor::Carrot, tabCeas, &ajustareZona);
+  webAn = ESPUI.addControl(ControlType::Number, "An", "", ControlColor::Carrot, tabCeas, &ajustareAn);
+  webLuna = ESPUI.addControl(ControlType::Number, "Luna", "", ControlColor::Carrot, tabCeas, &ajustareLuna);
+  webLat = ESPUI.addControl(ControlType::Number, "Latitudine", "", ControlColor::Carrot, tabCeas, &ajustareLatitudine);
+  webLon = ESPUI.addControl(ControlType::Number, "Longitudine", "", ControlColor::Carrot, tabCeas, &ajustareLongitudine);
+  webUtc = ESPUI.addControl(ControlType::Number, "Zona de timp (UTC)", "", ControlColor::Carrot, tabCeas, &ajustareZona);
 
   ESPUI.begin("Desk Link");
   
@@ -452,8 +482,10 @@ void setup() {
 
 void loop() {
   acum = Ceas.GetDateTime();
-  ESPUI.print(webTemp, String(dht.readTemperature()) + " °C");
-  ESPUI.print(webUmi, String(dht.readHumidity()) + " %");
+  tempe = dht.readTemperature();
+  humi = dht.readHumidity();
+  ESPUI.print(webTemp, String(tempe) + " °C");
+  ESPUI.print(webUmi, String(humi) + " %");
   printTimp(acum);
    
   //citire ora si minut alarma
@@ -472,7 +504,7 @@ void loop() {
     ESPUI.print(webAlarmStare, "Alarma Dezactivata!");
   
   if(ziCurenta != day()){
-    sun.setCurrentDate(year(), month(), day());
+    sun.setCurrentDate(an, luna, day());
   }
   
   ventilatieAuto();
@@ -568,6 +600,8 @@ void printTimp(const RtcDateTime& dt)
   minacum = dt.Minute();
   secacum = dt.Second();
   ziCurenta = dt.Day();
+  an = dt.Year();
+  luna = dt.Month();
   ESPUI.print(webTimp, datestring);
 }
 
@@ -593,9 +627,11 @@ void mancand(){
 }
 
 void soare(){
-  int apus, rasarit;
+  int rasarit, apus;
   rasarit = abs(static_cast<int>(sun.calcSunrise()));
   apus = static_cast<int>(sun.calcSunset());
+  r = rasarit;
+  a = apus;
   ESPUI.print(webRasarit, String(rasarit/60)+":"+String(rasarit%60)+" am");
   ESPUI.print(webApus, String(apus/60)+":"+String(apus%60)+" pm");
 }
