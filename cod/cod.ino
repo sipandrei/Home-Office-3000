@@ -225,10 +225,6 @@ void ajustareLongitudine( Control* sender, int value){
 }
 void ajustareZona( Control* sender, int value){
   UTC = sender->value.toInt();
-  if(UTC > 0)
-      UTC-=2*UTC; 
-    else
-      UTC = abs(UTC);
   sun.setPosition(latitudine, longitudine, UTC);
   sun.setTZOffset(UTC);
   EepromCeas.SetMemory(utcAdd, UTC);
