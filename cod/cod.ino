@@ -37,7 +37,7 @@ Button2 butonFata = Button2(13);
 
 
 //variabile server
-const char *ssid = "Desk Link";
+const char *ssid = "Home Office 3000";
 const char *pass = "";
 DNSServer server;
 IPAddress apIP(192, 168, 4, 1);
@@ -415,7 +415,7 @@ void setup() {
   webLon = ESPUI.addControl(ControlType::Number, "Longitudine", "", ControlColor::Carrot, tabCeas, &ajustareLongitudine);
   webUtc = ESPUI.addControl(ControlType::Number, "Zona de timp (UTC)", "", ControlColor::Carrot, tabCeas, &ajustareZona);
 
-  ESPUI.begin("Desk Link");
+  ESPUI.begin("Home Office 3000");
   //
   
   //initializare ecran
