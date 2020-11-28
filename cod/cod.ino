@@ -25,6 +25,7 @@
 #define VENT 16
 #define oprireAlarma1 14
 #define oprireAlarma2 13
+#define SIGdht 0
 
 Button2 butonSpate = Button2(14);
 Button2 butonEnter = Button2(12);
@@ -42,25 +43,17 @@ DNSServer server;
 IPAddress apIP(192, 168, 4, 1);
 const byte DNS_PORT = 53;
 
-//variabile interfata web
-int graphId;
-int webTemp;
-int webUmi;
-int webLum;
+int ora = 0,minu = 0,sec = 0;
+int webTemp, webUmi;
 int webVent, webVentNum;
-int webTimp;
-int webAlarmOra, oraacum;
-int webAlarmMin, minacum, secacum;
-int webAlarmSwitch, webAlarmStare, webAlarm, webAlarmTimer, webPauza, secBirou, pauzaSec = 0, pauzaMin = 0; //se memoreaza secundele din pauza de masa
+int webTimp, webAlarmMin, minacum, secacum, webAlarmOra, oraacum;
+int webAlarmSwitch, webAlarmStare, webAlarm, webAlarmTimer, webPauza, secBirou, pauzaSec = 0, pauzaMin = 0;
 int webAn, webLuna, webOra, webMin, webSec, webLat, webLon, webUtc, webApus, webRasarit;
 bool ecran = true, vent = LOW, anulare = false, alarma = false, alarmaActiva = false, repetare = false, timerInceput = false, firstRun = true, inPauza = false;
 uint8_t oraAlarma, minAlarma, offMin = -1, offSec = -2, numVent = 28, ziCurenta;
 uint16_t minAdd = 32, oraAdd = 64, birouAdd = 10;
 unsigned long milisecundeTrecut, milisecundeTrecutPauza = 0, debounce = 0;
-
 int tempe, humi, timer = 100, r, a, an, luna;
-
-//variabile afisare
 int pagina = 1;
 
 //declarare module 
@@ -68,17 +61,14 @@ RtcDS3231<TwoWire> Ceas(Wire);
 EepromAt24c32<TwoWire> EepromCeas(Wire);
 SSD1306Wire display(0x3c, SDA, SCL);
 RtcDateTime acum = Ceas.GetDateTime();
+DHT dht(SIGdht, DHT11);
 
 // variabile locatie
 float latitudine, longitudine;
 int UTC = 2, latAdd = 128, lonAdd = 140, utcAdd = 100;
 SunSet sun;
 
-// Preluare temperatura si umiditate
-#define SIGdht 0
-DHT dht(SIGdht, DHT11);
-
-// Luminozitate
+// Se calculeaza luminozitatea din camera
 long long raw, luxi;
 double Vout, RLDR;
 int luminozitate() {
@@ -106,16 +96,16 @@ void SchimbarePag()
     switch(pagina)
     {
       case 1:
-        pagina1();
+        pagina1();        // pe prima pagina se afiseaza ora actuala si timpul petrecut in pauza de masa - se poate porni numaratoarea pentru pauza
         break;
       case 2:
-        pagina2();
+        pagina2();      // pe a doua pagina se afiseaza rasaritul, apusul, temperatura, umiditatea si luminozitatea - se poate porni motorul pentru ventilatie
         break;
       case 3:
-        pagina3();
+        pagina3();    // pe a treia pagina se afiseaza ora si minutul alarmei, starea alarmei si numarul de secunde pentru a ajunge la birou, dupa dezactivarea alarmei
         break;
       case 4: 
-        pagina4();
+        pagina4();  // pe a patra pagina se afiseaza adresa ip
         break;
     }
 }
@@ -181,6 +171,7 @@ void pagina4(){
   display.drawCircle(74,62,1);
 }
 
+// oprire si pornire ecran 
 void pornireEcran()
 {
     if((millis() - debounce) > 50)
@@ -197,6 +188,7 @@ void pornireEcran()
     else
       display.displayOn();
 }
+//
 
 void paginaSpate(Button2& btn){
   pagina--; display.clear();
@@ -206,7 +198,7 @@ void paginaFata(Button2& btn){
 }
 
 // Functii interfata web
-// Ventilatie
+  // Ventilatie
 void controlVentilatie(Control *sender, int stare)
 {
   switch (stare) {
@@ -223,12 +215,10 @@ void controlVentilatie(Control *sender, int stare)
       break;
   }
 }
-
 void tempVentilatie(Control* sender, int value)
 {
   numVent = sender -> value.toInt();
 }
-
 void ventilatieAuto()
 {
    digitalWrite(VENT, vent);
@@ -239,7 +229,6 @@ void ventilatieAuto()
       else if(dht.readTemperature() < numVent)
       anulare = false;
 }
-
 void pornireVentButon(Button2& btn)
 {
   
@@ -282,8 +271,8 @@ void pornireVentButon(Button2& btn)
     break;
   }
 }
-
-// Configurare alarma
+  //
+ // Configurare alarma
 void stareAlarma(Control* sender, int value){
   if(alarma == true)
     ESPUI.print(webAlarmStare, "Alarma Activata!");
@@ -292,7 +281,7 @@ void stareAlarma(Control* sender, int value){
 }
 void timpAlarma( Control* sender, int value){
       ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
-  }
+  } 
 void inputOraAlarma( Control* sender, int value) {
   oraAlarma = sender->value.toInt();
   EepromCeas.SetMemory(oraAdd, oraAlarma);
@@ -317,7 +306,6 @@ void activareAlarma(Control *sender, int value)
       break;
   }
 }
-
 void timerBirou(Control *sender, int value){
   secBirou = sender->value.toInt()*1000;
   EepromCeas.SetMemory(birouAdd,secBirou);
@@ -325,9 +313,8 @@ void timerBirou(Control *sender, int value){
 void afisarePauzaMasa( Control* sender, int value){
       ESPUI.print(webPauza,String(pauzaMin) + ":" + String(pauzaSec));
   }
-
-//Ajustare ceas
-int ora = 0,minu = 0,sec = 0;
+   //
+  //Ajustare ceas
 void ajustareOra( Control* sender, int value){
   ora = sender->value.toInt();
   Ceas.SetDateTime(RtcDateTime(acum.Year(), acum.Month(), acum.Day(), ora, minacum, secacum));
@@ -351,7 +338,8 @@ void ajustareLuna(Control* sender, int value){
   luna = sender->value.toInt();
   Ceas.SetDateTime(RtcDateTime(acum.Year(), luna, acum.Day(), oraacum, minacum, secacum));
 }
-
+  //
+ // ajustare pozitie geografica
 void ajustareLatitudine( Control* sender, int value){
   latitudine = sender->value.toFloat();
   sun.setPosition(latitudine, longitudine, UTC);
@@ -370,14 +358,15 @@ void ajustareZona( Control* sender, int value){
   sun.setTZOffset(UTC);
   EepromCeas.SetMemory(utcAdd, UTC);
 }
+ //
+//
 
-
-void setup() {
-  secBirou = EepromCeas.GetMemory(10)*1000;
-  
-  ESPUI.setVerbosity(Verbosity::Verbose);
+void setup() {   
   Serial.begin(115200);
   Serial.println();
+
+  // configurare si initializare punct de acces 
+  ESPUI.setVerbosity(Verbosity::Verbose);
   WiFi.mode(WIFI_AP);
   WiFi.softAP(ssid, pass);
   IPAddress serverIp = WiFi.softAPIP();
@@ -385,15 +374,20 @@ void setup() {
 
   server.start(DNS_PORT, "*", apIP);
   Serial.println("Server initializat");
-
+  // 
+ 
   Wire.begin();
   EepromCeas.Begin(); 
   
+  secBirou = EepromCeas.GetMemory(10)*1000;
+  
+  // configurare interfata web
+    //taburi 
   uint16_t tabCtrl =  ESPUI.addControl(ControlType::Tab, "Principal", "Principal");
   uint16_t tabAlarm = ESPUI.addControl(ControlType::Tab, "Alarma", "Alarma");
   uint16_t tabCeas = ESPUI.addControl(ControlType::Tab, "Ajustare Ceas si Locatie", "Ajustare Ceas si Locatie");
 
-  //tabPrincipal
+    //tabPrincipal
   webVent = ESPUI.addControl(ControlType::Switcher, "Control Ventilatie", "", ControlColor::Wetasphalt, tabCtrl, &controlVentilatie);
   webVentNum = ESPUI.addControl(ControlType::Number, "Introduceti temperatura la care porneste ventilatorul", String(numVent), ControlColor::Wetasphalt, tabCtrl, &tempVentilatie);
   webTemp = ESPUI.addControl(ControlType::Label, "Temperatura", "", ControlColor::Wetasphalt, tabCtrl);
@@ -401,7 +395,7 @@ void setup() {
   webRasarit = ESPUI.addControl(ControlType::Label, "Rasarit", "", ControlColor::Wetasphalt, tabCtrl);
   webApus = ESPUI.addControl(ControlType::Label, "Apus", "", ControlColor::Wetasphalt, tabCtrl);
 
-  //tabAlarm
+    //tabAlarm
   webAlarmOra = ESPUI.addControl(ControlType::Number, "Ora alarma", "", ControlColor::Emerald, tabAlarm, &inputOraAlarma);
   webAlarmMin = ESPUI.addControl(ControlType::Number, "Minut alarma", "", ControlColor::Emerald, tabAlarm, &inputMinAlarma);
   webAlarmSwitch = ESPUI.addControl(ControlType::Button, "Activare alarma", "", ControlColor::Emerald, tabAlarm, &activareAlarma);
@@ -410,7 +404,7 @@ void setup() {
   webAlarm = ESPUI.addControl(ControlType::Label, "Timp Alarma", "", ControlColor::Emerald, tabAlarm, &timpAlarma);
   webPauza = ESPUI.addControl(ControlType::Label, "Timp petrecut in pauza de masa", "", ControlColor::Emerald, tabAlarm, &afisarePauzaMasa);
    
-  //tabCeas
+    //tabCeas
   webTimp = ESPUI.addControl(ControlType::Label, "Ora", "", ControlColor::Carrot, tabCeas);
   webOra = ESPUI.addControl(ControlType::Number, "Ore", "", ControlColor::Carrot, tabCeas, &ajustareOra);
   webMin = ESPUI.addControl(ControlType::Number, "Minute", "", ControlColor::Carrot, tabCeas, &ajustareMinut);
@@ -422,14 +416,16 @@ void setup() {
   webUtc = ESPUI.addControl(ControlType::Number, "Zona de timp (UTC)", "", ControlColor::Carrot, tabCeas, &ajustareZona);
 
   ESPUI.begin("Desk Link");
+  //
   
   //initializare ecran
   display.init();
   display.clear();
   display.flipScreenVertically();
   display.setFont(ArialMT_Plain_16);
+  //
 
-
+  // initializare si verificare ceas
   Ceas.Begin();
   if (!Ceas.IsDateTimeValid())
   {
@@ -446,42 +442,50 @@ void setup() {
       Ceas.SetDateTime(RtcDateTime(__DATE__, __TIME__));
     }
   }
+ 
+  Ceas.Enable32kHzPin(false);
+  Ceas.SetSquareWavePin(DS3231SquareWavePin_ModeNone); 
+  //
   
   dht.begin();
   
-  Ceas.Enable32kHzPin(false);
-  Ceas.SetSquareWavePin(DS3231SquareWavePin_ModeNone); 
-
   //adrese ora si minut alarma
   EepromCeas.SetMemory(0, minAdd);
   EepromCeas.SetMemory(1,oraAdd);
-
+  //
+  
+  // pozitionare geografica
   latitudine = EepromCeas.GetMemory(latAdd);
   longitudine = EepromCeas.GetMemory(latAdd);
   UTC = EepromCeas.GetMemory(utcAdd);
 
   sun.setPosition(latitudine, longitudine, UTC);
   sun.setTZOffset(UTC);
+  //
     
+  // setare mod pini
   pinMode(LED, OUTPUT);
   pinMode(BUZZ, OUTPUT);
   pinMode(VENT, OUTPUT);
   digitalWrite(BUZZ, LOW);
-  
+  //
+   
+  // configurare butoane
   butonEnter.setTapHandler(pornireVentButon);
   butonFata.setTapHandler(paginaFata);
   butonSpate.setTapHandler(paginaSpate);
+  //
 }
 
 void loop() {
-  acum = Ceas.GetDateTime();
-  tempe = dht.readTemperature();
-  humi = dht.readHumidity();
-  ESPUI.print(webTemp, String(tempe) + " °C");
-  ESPUI.print(webUmi, String(humi) + " %");
-  printTimp(acum);
+  acum = Ceas.GetDateTime();                      // ora actuala
+  tempe = dht.readTemperature();                  // temperatura actuala
+  humi = dht.readHumidity();                      // umiditatea actuala
+  ESPUI.print(webTemp, String(tempe) + " °C");    // afisare temperatura
+  ESPUI.print(webUmi, String(humi) + " %");       // afisare umiditate
+  printTimp(acum);                                // afisare ora
    
-  //citire ora si minut alarma
+  // citire ora si minut alarma
   if(firstRun){
     secBirou = EepromCeas.GetMemory(birouAdd);
     minAlarma = EepromCeas.GetMemory(minAdd);
@@ -490,6 +494,7 @@ void loop() {
     ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
   firstRun = false;
   }
+  //
 
   if(alarma == true)
     ESPUI.print(webAlarmStare, "Alarma Activata!");
@@ -499,76 +504,79 @@ void loop() {
   if(ziCurenta != day()){
     sun.setCurrentDate(an, luna, day());
   }
-  
-  ventilatieAuto();
    
   butonSpate.loop(); 
   butonEnter.loop();
   butonFata.loop();
+  
+  ventilatieAuto(); // ventilatie automata
+  alarmare();       // alarma
+  mancand();        // pauza de masa
+  soare();          // apus si rasarit
 
-  alarmare();
-  mancand();
-  soare();
+  // apelare functii afisare ecran
   SchimbarePag();
   display.display();
   pornireEcran();
+  //
 
   if(repetare == false)
     ESPUI.print(webAlarm, String(oraAlarma) + ":" + String(minAlarma));
 
   display.clear();
   server.processNextRequest();
-
 }
 
 void alarmare(){
-    if(alarma == true)
+    if(alarma == true)                                           // daca este alarma pornita
   {
-    if(oraacum == oraAlarma && minacum == minAlarma)
+    if(oraacum == oraAlarma && minacum == minAlarma)           // daca ora actuala este ora alarmei
      {
-      if(repetare == false)
-        alarmaActiva = true;
+      if(repetare == false)                                  // daca nu a fost oprita alarma
+        alarmaActiva = true;                                // alarma porneste
      }
-     else if(secBirou/1000 == 0 && repetare == true && EepromCeas.GetMemory(birouAdd)!=0)
+     else if(secBirou/1000 == 0 && repetare == true && EepromCeas.GetMemory(birouAdd)!=0) // daca a trecut timpul de ajuns la birou dupa oprirea alarmei
      {
-      tone(BUZZ, 500, 10000);
-      secBirou = EepromCeas.GetMemory(birouAdd);
-      ESPUI.print(webAlarmTimer, String(secBirou/1000));
-      repetare = false;
+      tone(BUZZ, 500, 5000);                                            // emite sunete
+      secBirou = EepromCeas.GetMemory(birouAdd);                       // cronometrul e resetat
+      ESPUI.print(webAlarmTimer, String(secBirou/1000));                                  
+      repetare = false;                                                              
      }
       
     if(alarmaActiva == true)
     {
-      if((digitalRead(oprireAlarma1) == HIGH && digitalRead(oprireAlarma2) == HIGH) or (luminozitate() >= 1 && oraAlarma<=7))
+      if((digitalRead(oprireAlarma1) == HIGH && digitalRead(oprireAlarma2) == HIGH) or (luminozitate() >= 1 && oraAlarma<=7)) // oprire alarma utilizand doua butoane sau lumina din camera - dimineata
         {
-          repetare = true;
-          alarmaActiva = false;
+          repetare = true;                       // nu se mai repeta de data asta
+          alarmaActiva = false;                 // alarma oprita
           Serial.println("Alarma inchisa");
         }
-      tone(BUZZ, 1500,2000);
+      tone(BUZZ, 1500,2000); // ton alarma
     }
 
-    if(repetare == true)
+    if(repetare == true)  // daca a fost alarma oprita
     {
-      timpBirou();
+      timpBirou();      // cronometru
     }
   }
 
 }
 
+// cronometrul efectiv
 void timpBirou(){
   unsigned long milisecundeBirou = millis();
-  if(timerInceput == false && secBirou == 0)
+  if(timerInceput == false && secBirou == 0) 
   {
     milisecundeTrecut = milisecundeBirou;
     timerInceput = true;
   }
   
-  if(milisecundeBirou - milisecundeTrecut >= 1000 && secBirou/1000>0)
+  if(milisecundeBirou - milisecundeTrecut >= 1000 && secBirou/1000>0) 
   {
     milisecundeTrecut = milisecundeBirou;
     secBirou-=1000;
     }
+    
   if(timerInceput == true && secBirou == 0)
   {
     timerInceput = false, tone(BUZZ, 500, 500), secBirou = EepromCeas.GetMemory(birouAdd);;
@@ -578,6 +586,7 @@ void timpBirou(){
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
+// afisare ora , minutul si secunda
 void printTimp(const RtcDateTime& dt)
 {
   char datestring[14];
@@ -598,6 +607,7 @@ void printTimp(const RtcDateTime& dt)
   ESPUI.print(webTimp, datestring);
 }
 
+// pauza de masa
 void mancand(){
  if(inPauza == true)
  {
@@ -619,6 +629,7 @@ void mancand(){
  
 }
 
+// rasarit si apus
 void soare(){
   int rasarit, apus;
   rasarit = abs(static_cast<int>(sun.calcSunrise()));
