@@ -553,7 +553,7 @@ void alarmare(){
       tone(BUZZ, 1500,2000); // ton alarma
     }
 
-    if(repetare == true && EepromCeas.GetMemory(birouAdd))  // daca a fost alarma oprita
+    if(repetare == true && EepromCeas.GetMemory(birouAdd)!=0)  // daca a fost alarma oprita
     {
       timpBirou();      // Începe cronometru
     }
