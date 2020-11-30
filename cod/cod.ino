@@ -1,4 +1,4 @@
-#include <Button2.h>
+#include <Button2.h>       
 #include <cmath> 
 
 #include <RtcDateTime.h>
@@ -553,9 +553,9 @@ void alarmare(){
       tone(BUZZ, 1500,2000); // ton alarma
     }
 
-    if(repetare == true)  // daca a fost alarma oprita
+    if(repetare == true && EepromCeas.GetMemory(birouAdd))  // daca a fost alarma oprita
     {
-      timpBirou();      // cronometru
+      timpBirou();      // Începe cronometru
     }
   }
 
@@ -578,7 +578,7 @@ void timpBirou(){
     
   if(timerInceput == true && secBirou == 0)
   {
-    timerInceput = false, tone(BUZZ, 500, 500), secBirou = EepromCeas.GetMemory(birouAdd);;
+    timerInceput = false, tone(BUZZ, 500, 500), secBirou = EepromCeas.GetMemory(birouAdd);
   }
   ESPUI.print(webAlarmTimer, String(secBirou/1000));
 }
